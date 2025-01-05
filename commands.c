@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/stat.h>
 #include "space.h"
 
 // 列出所有檔案
@@ -108,43 +109,53 @@ void RemoveFile(char *path) {
     printf("File '%s' removed successfully\n", path);
 }
 
-// void RemoveFile(char *path){ // rm
-//     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
-//     int foundInodeIndex = -1;
-    
-//     for(int i = 0; i < sb->inodeCount; i++) {
-//         if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
-//             foundInodeIndex = i;
-//             break;
-//         }
-//     }
-    
-//     if(foundInodeIndex == -1) {
-//         printf("File '%s' not found\n", path);
-//         return;
-//     }
-    
-//     INode* inode = &inodes[foundInodeIndex];
-//     inode->isUsed = 0;
-//     printf("File '%s' removed successfully\n", path);
-// }
-
-
 void MakeDirectory(char *path) {
+    // 1. 檢查目錄名稱是否已存在
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
+    for(int i = 0; i < sb->inodeCount; i++) {
+        if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
+            printf("Directory '%s' already exists\n", path);
+            return;
+        }
+    }
+
+    // 2. 分配 inode
     int inodeNum = allocateInode();
-    if (inodeNum == -1) {
+    if(inodeNum == -1) {
         printf("No free inode available\n");
         return;
     }
 
-    INode *inode = &inodes[inodeNum];
+    // 3. 初始化目錄的 inode
+    INode* inode = &inodes[inodeNum];
     strncpy(inode->fileName, path, sizeof(inode->fileName) - 1);
-    inode->fileType = 1;  // 資料夾
+    inode->fileType = 1;  // 1 表示目錄
     inode->isUsed = 1;
+    inode->size = 0;
     inode->createTime = time(NULL);
     inode->modifyTime = time(NULL);
-    printf("資料夾 '%s' 已建立！\n", path);
+    inode->permissions = 0755;  // 目錄的默認權限
+
+    // 4. 初始化目錄的內容
+    for(int i = 0; i < 10; i++) {
+        inode->directBlocks[i] = -1;
+    }
+    inode->indirectBlock = -1;
+    
+    // 5. 分配第一個區塊來存儲目錄項
+    int blockNum = allocateBlock();
+    if(blockNum == -1) {
+        // 如果分配區塊失敗，需要回滾
+        freeInode(inodeNum);
+        printf("Failed to allocate block for directory\n");
+        return;
+    }
+    inode->directBlocks[0] = blockNum;
+
+    // 6. 更新系統計數
+    sb->filesBlockCount++;
+
+    printf("Directory '%s' created successfully\n", path);
 }
 
 void RemoveDirectory(char *path){ // rmdir
@@ -243,6 +254,21 @@ int GetFile(char *path) {
     }
 
     INode* inode = &inodes[foundInodeIndex];
+
+    // 檢查是否為目錄
+    if(inode->fileType == 1) {  // 1 表示目錄
+        // 在實體檔案系統建立目錄
+        #ifdef _WIN32
+            if(mkdir(path) != 0) {
+        #else
+            if(mkdir(path, 0755) != 0) {
+        #endif
+                printf("Failed to create directory '%s'\n", path);
+                return 1;
+            }
+        printf("Directory '%s' exported successfully\n", path);
+        return 0;
+    }
     
     // 2. 建立實體檔案
     FILE *fp = fopen(path, "w");

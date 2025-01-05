@@ -55,12 +55,12 @@ int main(void){
                 scanf("%s", filename);
                 RemoveFile(filename);
             }
-
-            // else if(strcmp(cmd, "mkdir") == 0){
-            //     char dirname[32];
-            //     scanf("%s", dirname);
-            //     MakeDirectory(dirname);
-            // }
+            else if(strcmp(cmd, "mkdir") == 0){
+                char dirname[32];
+                scanf("%s", dirname);
+                MakeDirectory(dirname);
+            }
+            
             // // else if(strcmp(cmd, "rmdir") == 0){
             //     char dirname[32];
             //     scanf("%s", dirname);
@@ -75,7 +75,6 @@ int main(void){
                 scanf("%s", filename);
                 PutFile(filename);
             }
-
             else if(strncmp(cmd, "get", 3) == 0){
                 char filename[32];
                 scanf("%s", filename);
