@@ -1,29 +1,18 @@
 # Adv C final project
 
 ## Commands
-- `ls`: list directory
-- `cd`: change directory
-- `rm`: remove
-- `mkdir`: make directory
-- `rmdir`: remove directory
-- `put`: put file into the space
-- `get`: get file from the space
-- `cat`: show content
-- `status`: show status of the space
-- `help`
-- `exit and store img`
-
-## File System 
-
-### 1. create a virtual disk
-### 2. initial the superblock
-- `partitionSize`: (stdin)
-- `blockSize`: (define by BLOCKSIZE)
-- `inodeCount`: (defne by MAZINODE)
-- `blockCount`: (partitionSize-superblock-inodeCount*sizeof(INode))/blocksize
-- `freeInodeCount`: ()
-- 
-### 3. 
+- [x] `ls`: list directory
+- [x] `cd`: change directory
+- [x] `rm`: remove
+- [x] `mkdir`: make directory
+- [x] `rmdir`: remove directory
+- [x] `put`: put file into the space
+- [x] `get`: get file from the space
+- [x] `vi`:  Visual Editor
+- [x] `cat`: show content
+- [x] `status`: show status of the space
+- [x] `help`
+- [x] `exit and store img`
 
 
 ## Example
