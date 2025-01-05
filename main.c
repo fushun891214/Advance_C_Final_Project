@@ -40,9 +40,9 @@ int main(void){
             printf("/ $ ");
             scanf("%s", cmd);
 
-            // if(strcmp(cmd, "ls") == 0){
-            //     ListFiles();
-            // }
+            if(strcmp(cmd, "ls") == 0){
+                ListFiles();
+            }
             
             // // else if(strcmp(cmd, "cd") == 0){
             //     char dirname[32];

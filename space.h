@@ -5,8 +5,6 @@
 
 #define BLOCKSIZE 1024
 #define INODE_RATIO 16  // 表示 1/16 的空間給 inode
-// #define MAXBLOCK 2000
-// #define MAXINODE 256
 
 typedef struct superBlock {
    int partitionSize;       // 總空間大小
