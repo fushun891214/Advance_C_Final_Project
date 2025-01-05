@@ -9,22 +9,22 @@
 void ListFiles(void){
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     printf("\n檔案列表:\n");
-    printf("----------------------------------------\n");
+    printf("---------------------------------------------------------\n");
     printf("檔名\t\t大小\t\t建立時間\n");
-    printf("----------------------------------------\n");
+    printf("---------------------------------------------------------\n");
     
     for (int i = 0; i < sb->inodeCount; i++) {
         if (inodes[i].isUsed) {
             char timeStr[26];
             ctime_r(&inodes[i].createTime, timeStr);
             timeStr[24] = '\0';  // 移除換行符
-            printf("%-15s\t%d bytes\t%s\n", 
+            printf("%-15s\t%d bytes\t\t%s\n", 
                    inodes[i].fileName, 
                    inodes[i].size, 
                    timeStr);
         }
     }
-    printf("----------------------------------------\n");
+    printf("---------------------------------------------------------\n");
 }
 
 void ChangeDirectory(char *path){  // cd
@@ -52,7 +52,8 @@ void ChangeDirectory(char *path){  // cd
     printf("Directory changed to '%s'\n", path);
 }
 
-void RemoveFile(char *path){ // rm
+void RemoveFile(char *path) {
+    // 1. 檢查並找到檔案的 inode
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
     
@@ -67,11 +68,66 @@ void RemoveFile(char *path){ // rm
         printf("File '%s' not found\n", path);
         return;
     }
-    
+
+    // 2. 釋放所有直接區塊
     INode* inode = &inodes[foundInodeIndex];
+    for(int i = 0; i < 10; i++) {
+        if(inode->directBlocks[i] != -1) {
+            freeBlock(inode->directBlocks[i]);
+            inode->directBlocks[i] = -1;
+        }
+    }
+
+    // 3. 處理間接區塊（如果有）
+    if(inode->indirectBlock != -1) {
+        // 取得間接區塊表
+        int* indirectTable = (int*)(virtualDisk + 
+                                  sb->firstDataBlock * BLOCKSIZE + 
+                                  inode->indirectBlock * BLOCKSIZE);
+        
+        // 釋放所有指向的區塊
+        for(int i = 0; i < BLOCKSIZE/sizeof(int); i++) {
+            if(indirectTable[i] != -1) {
+                freeBlock(indirectTable[i]);
+            }
+        }
+        // 釋放間接區塊本身
+        freeBlock(inode->indirectBlock);
+        inode->indirectBlock = -1;
+    }
+
+    // 4. 更新 inode 資訊
     inode->isUsed = 0;
+    inode->size = 0;
+    memset(inode->fileName, 0, sizeof(inode->fileName));
+    
+    // 5. 更新系統計數器
+    sb->freeInodeCount++;
+    sb->usedInodeCount--;
+
     printf("File '%s' removed successfully\n", path);
 }
+
+// void RemoveFile(char *path){ // rm
+//     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
+//     int foundInodeIndex = -1;
+    
+//     for(int i = 0; i < sb->inodeCount; i++) {
+//         if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
+//             foundInodeIndex = i;
+//             break;
+//         }
+//     }
+    
+//     if(foundInodeIndex == -1) {
+//         printf("File '%s' not found\n", path);
+//         return;
+//     }
+    
+//     INode* inode = &inodes[foundInodeIndex];
+//     inode->isUsed = 0;
+//     printf("File '%s' removed successfully\n", path);
+// }
 
 
 void MakeDirectory(char *path) {
@@ -136,7 +192,7 @@ int PutFile(char *path) {
         printf("Failed to access inode table\n");
         return 1;
     }
-    
+
     for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
             printf("File '%s' already exists\n", path);
@@ -168,31 +224,6 @@ int PutFile(char *path) {
     printf("File '%s' created successfully\n", path);
     return 0;
 }
-
-// int PutFile(char *path) { 
-//     int inodeNum = allocateInode();  // 在虛擬檔案系統分配 inode
-//     if(inodeNum == -1) {
-//         printf("No free inode available\n");
-//         return 1;
-//     }
-
-//     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
-//     INode* inode = &inodes[inodeNum];
-    
-//     strncpy(inode->fileName, path, sizeof(inode->fileName) - 1);
-//     inode->size = 0;
-//     inode->isUsed = 1;
-//     inode->createTime = time(NULL);
-//     inode->modifyTime = time(NULL);
-    
-//     for(int i = 0; i < 10; i++) {
-//         inode->directBlocks[i] = -1;
-//     }
-//     inode->indirectBlock = -1;
-
-//     printf("File '%s' created successfully\n", path);
-//     return 0;
-// }
 
 int GetFile(char *path) {
    // 1. 找到檔案的 inode
@@ -260,16 +291,6 @@ int GetFile(char *path) {
    printf("File '%s' retrieved successfully (size: %d bytes)\n", path, inode->size);
    return 0;
 }
-
-// int GetFile(char *path){ // get
-//     FILE *fp = fopen(path, "r");
-//     if(fp == NULL){
-//         printf("file open error\n");
-//         return 1;
-//     }
-//     fclose(fp);
-//     return 0;
-// }
 
 int ViEditor(char *path){ // vi
     FILE *fp = fopen(path, "w");

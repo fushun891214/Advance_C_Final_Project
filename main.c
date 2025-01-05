@@ -50,11 +50,11 @@ int main(void){
             //     ChangeDirectory(dirname);
             // }
 
-            // else if(strcmp(cmd, "rm") == 0){
-            //     char filename[32];
-            //     scanf("%s", filename);
-            //     RemoveFile(filename);
-            // }
+            else if(strcmp(cmd, "rm") == 0){
+                char filename[32];
+                scanf("%s", filename);
+                RemoveFile(filename);
+            }
 
             // else if(strcmp(cmd, "mkdir") == 0){
             //     char dirname[32];
@@ -70,11 +70,12 @@ int main(void){
             //     RemoveDirectory(dirname);
             // }
     
-            if(strncmp(cmd, "put", 3) == 0){
+            else if(strncmp(cmd, "put", 3) == 0){
                 char filename[32];
                 scanf("%s", filename);
                 PutFile(filename);
             }
+
             else if(strncmp(cmd, "get", 3) == 0){
                 char filename[32];
                 scanf("%s", filename);
