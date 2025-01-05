@@ -36,19 +36,19 @@ int main(void){
         Help();
 
         while(1){
+            printf("%s $ ", currentPath);
             char cmd[256];
-            printf("/ $ ");
             scanf("%s", cmd);
 
             if(strcmp(cmd, "ls") == 0){
                 ListFiles();
             }
             
-            // // else if(strcmp(cmd, "cd") == 0){
-            //     char dirname[32];
-            //     scanf("%s", dirname);
-            //     ChangeDirectory(dirname);
-            // }
+            else if(strcmp(cmd, "cd") == 0){
+                char dirname[32];
+                scanf("%s", dirname);
+                ChangeDirectory(dirname);
+            }
 
             else if(strcmp(cmd, "rm") == 0){
                 char filename[32];
@@ -61,14 +61,11 @@ int main(void){
                 MakeDirectory(dirname);
             }
             
-            // // else if(strcmp(cmd, "rmdir") == 0){
-            //     char dirname[32];
-            //     scanf("%s", dirname);
-            //     ChangeDirectory(dirname); 
-            //     ListFiles();
-            //     RemoveFile();
-            //     RemoveDirectory(dirname);
-            // }
+            else if(strcmp(cmd, "rmdir") == 0){
+                char dirname[32];
+                scanf("%s", dirname);
+                RemoveDirectory(dirname);
+            }
     
             else if(strncmp(cmd, "put", 3) == 0){
                 char filename[32];
