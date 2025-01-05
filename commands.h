@@ -6,6 +6,7 @@
 extern char currentPath[MAX_PATH_LEN];
 extern INode* currentDir;
 
+void HandleCommands(void);
 void ListFiles(void);
 void ChangeDirectory(char *path);
 void PrintWorkingDirectory(char **fullPath, char *currentPath, char *path);
@@ -19,7 +20,7 @@ void DisplayFileContent(char *path);
 void DisplayStatus();
 void Help(void);
 void ExitAndStoreImage(void);
-void LoadDumpImage(void);
+int LoadDumpImage(char *path);
 int ExportDirectory(char *path, INode* dirInode); 
 
 #endif
