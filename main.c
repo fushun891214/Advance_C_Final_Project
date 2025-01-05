@@ -19,6 +19,11 @@ int main(void){
         int size = 0;
         scanf("%d",&size);
         printf("Partition size = %d\n",size);
+
+        if (initFs(size) != 0) {
+            printf("Failed to initialize file system\n");
+            return -1;
+        }
         
         // char *ptr_Partition=calloc(*SizeOfPartition,sizeof(char));
         // if (ptr_Partition!=NULL){

@@ -13,7 +13,7 @@ void ListFiles(void){
     printf("檔名\t\t大小\t\t建立時間\n");
     printf("----------------------------------------\n");
     
-    for (int i = 0; i < MAXINODE; i++) {
+    for (int i = 0; i < sb->inodeCount; i++) {
         if (inodes[i].isUsed) {
             char timeStr[26];
             ctime_r(&inodes[i].createTime, timeStr);
@@ -31,7 +31,7 @@ void ChangeDirectory(char *path){  // cd
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
     
-    for(int i = 0; i < MAXINODE; i++) {
+    for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
             foundInodeIndex = i;
             break;
@@ -56,7 +56,7 @@ void RemoveFile(char *path){ // rm
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
     
-    for(int i = 0; i < MAXINODE; i++) {
+    for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
             foundInodeIndex = i;
             break;
@@ -95,7 +95,7 @@ void RemoveDirectory(char *path){ // rmdir
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
     
-    for(int i = 0; i < MAXINODE; i++) {
+    for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
             foundInodeIndex = i;
             break;
@@ -117,36 +117,49 @@ void RemoveDirectory(char *path){ // rmdir
     printf("Directory '%s' removed successfully\n", path);
 }
 
-// int PutFile(char *path){ // put
-//     FILE *fp = fopen(path, "w");
-//     if(fp == NULL){
-//         printf("file open error\n");
-//         return 1;
-//     }
-//     fseek(fp, 0, SEEK_END);
-//     long fileSize = ftell(fp);
-//     fseek(fp, 0, SEEK_SET);
-//     printf("file size: %ld\n", fileSize);
-//     fclose(fp);
-//     return 0;
-// }
-
 int PutFile(char *path) { 
-    int inodeNum = allocateInode();  // 在虛擬檔案系統分配 inode
+    if(path == NULL) {
+        printf("Invalid file name\n");
+        return 1;
+    }
+
+    // 檢查虛擬磁碟是否已初始化
+    if(virtualDisk == NULL || sb == NULL) {
+        printf("File system not initialized\n");
+        return 1;
+    }
+
+    // 1. 先檢查檔案是否已存在
+    INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
+
+    if(inodes == NULL) {
+        printf("Failed to access inode table\n");
+        return 1;
+    }
+    
+    for(int i = 0; i < sb->inodeCount; i++) {
+        if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
+            printf("File '%s' already exists\n", path);
+            return 1;
+        }
+    }
+
+    // 2. 分配 inode
+    int inodeNum = allocateInode();
     if(inodeNum == -1) {
         printf("No free inode available\n");
         return 1;
     }
 
-    INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
+    // 3. 初始化 inode
     INode* inode = &inodes[inodeNum];
-    
     strncpy(inode->fileName, path, sizeof(inode->fileName) - 1);
     inode->size = 0;
     inode->isUsed = 1;
     inode->createTime = time(NULL);
     inode->modifyTime = time(NULL);
     
+    // 4. 初始化區塊指標
     for(int i = 0; i < 10; i++) {
         inode->directBlocks[i] = -1;
     }
@@ -156,12 +169,37 @@ int PutFile(char *path) {
     return 0;
 }
 
+// int PutFile(char *path) { 
+//     int inodeNum = allocateInode();  // 在虛擬檔案系統分配 inode
+//     if(inodeNum == -1) {
+//         printf("No free inode available\n");
+//         return 1;
+//     }
+
+//     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
+//     INode* inode = &inodes[inodeNum];
+    
+//     strncpy(inode->fileName, path, sizeof(inode->fileName) - 1);
+//     inode->size = 0;
+//     inode->isUsed = 1;
+//     inode->createTime = time(NULL);
+//     inode->modifyTime = time(NULL);
+    
+//     for(int i = 0; i < 10; i++) {
+//         inode->directBlocks[i] = -1;
+//     }
+//     inode->indirectBlock = -1;
+
+//     printf("File '%s' created successfully\n", path);
+//     return 0;
+// }
+
 int GetFile(char *path) {
    // 1. 找到檔案的 inode
    INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
    int foundInodeIndex = -1;
    
-    for(int i = 0; i < MAXINODE; i++) {
+    for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
             foundInodeIndex = i;
             break;

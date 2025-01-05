@@ -4,11 +4,9 @@
 #include <time.h>
 
 #define BLOCKSIZE 1024
-#define MAXBLOCK 2000
-#define MAXINODE 256
-
-extern char* virtualDisk;
-extern struct superBlock* sb;
+#define INODE_RATIO 16  // 表示 1/16 的空間給 inode
+// #define MAXBLOCK 2000
+// #define MAXINODE 256
 
 typedef struct superBlock {
    int partitionSize;       // 總空間大小
@@ -25,6 +23,11 @@ typedef struct superBlock {
    int magicNumber;         // 檔案系統識別碼
    time_t mountTime;        // 掛載時間
 }SuperBlock;
+
+// 資料區塊：儲存實際的檔案內容
+typedef struct block {
+    char data[BLOCKSIZE];   // 實際儲存資料的空間
+} Block;
 
 typedef struct iNode {
     char fileName[32];          // 檔案名稱
@@ -45,5 +48,8 @@ int getFreeBlock(void);
 void freeBlock(int blockNum);
 int getFreeInode(void);
 void freeInode(int inodeNum);
+
+extern char* virtualDisk;
+extern SuperBlock* sb;
 
 #endif
