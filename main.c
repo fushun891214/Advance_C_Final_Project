@@ -40,9 +40,9 @@ int main(void){
             printf("/ $ ");
             scanf("%s", cmd);
 
-            // if(strcmp(cmd, "ls") == 0){
-            //     ListFiles();
-            // }
+            if(strcmp(cmd, "ls") == 0){
+                ListFiles();
+            }
             
             // // else if(strcmp(cmd, "cd") == 0){
             //     char dirname[32];
@@ -50,17 +50,17 @@ int main(void){
             //     ChangeDirectory(dirname);
             // }
 
-            // else if(strcmp(cmd, "rm") == 0){
-            //     char filename[32];
-            //     scanf("%s", filename);
-            //     RemoveFile(filename);
-            // }
-
-            // else if(strcmp(cmd, "mkdir") == 0){
-            //     char dirname[32];
-            //     scanf("%s", dirname);
-            //     MakeDirectory(dirname);
-            // }
+            else if(strcmp(cmd, "rm") == 0){
+                char filename[32];
+                scanf("%s", filename);
+                RemoveFile(filename);
+            }
+            else if(strcmp(cmd, "mkdir") == 0){
+                char dirname[32];
+                scanf("%s", dirname);
+                MakeDirectory(dirname);
+            }
+            
             // // else if(strcmp(cmd, "rmdir") == 0){
             //     char dirname[32];
             //     scanf("%s", dirname);
@@ -70,7 +70,7 @@ int main(void){
             //     RemoveDirectory(dirname);
             // }
     
-            if(strncmp(cmd, "put", 3) == 0){
+            else if(strncmp(cmd, "put", 3) == 0){
                 char filename[32];
                 scanf("%s", filename);
                 PutFile(filename);

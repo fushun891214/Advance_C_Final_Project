@@ -62,55 +62,6 @@ int initFs(int size) {
     return 0;
 }
 
-// int initFs(int size){
-//     // 1. 分配虛擬磁碟空間
-//     virtualDisk = (char*)malloc(size);
-//     if (virtualDisk == NULL) {
-//         return -1;  // 分配失敗
-//     }
-
-//     // 2. 初始化 superblock
-//     sb = (SuperBlock*)virtualDisk;
-//     sb->partitionSize = size;
-//     sb->blockSize = BLOCKSIZE;
-//     sb->inodeCount = MAXINODE;
-//     sb->blockCount = (size - sizeof(SuperBlock) - 
-//                      MAXINODE * sizeof(INode)) / BLOCKSIZE;
-//     sb->freeInodeCount = MAXINODE;
-//     sb->usedInodeCount = 0;
-//     sb->freeBlockCount = sb->blockCount;
-//     sb->usedBlockCount = 0;
-//     sb->filesBlockCount = 0;
-//     sb->firstDataBlock = (sizeof(SuperBlock) + 
-//                          MAXINODE * sizeof(INode) + 
-//                          sb->blockCount / 8 + BLOCKSIZE - 1) / BLOCKSIZE;
-//     sb->maxFileSize = BLOCKSIZE * (10 + BLOCKSIZE/sizeof(int));  // 直接塊+間接塊
-//     sb->magicNumber = 0x12345678;  // 自定義的魔數
-//     sb->mountTime = time(NULL);
-
-//     // 3. 初始化 inode 區域
-//     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
-//     for(int i = 0; i < MAXINODE; i++) {
-//         inodes[i].isUsed = 0;
-//         inodes[i].size = 0;
-//         memset(inodes[i].fileName, 0, sizeof(inodes[i].fileName));
-//         for(int j = 0; j < 10; j++) {
-//             inodes[i].directBlocks[j] = -1;
-//         }
-//         inodes[i].indirectBlock = -1;
-//         inodes[i].createTime = time(NULL);
-//         inodes[i].modifyTime = time(NULL);
-//         inodes[i].fileType = 0;
-//         inodes[i].permissions = 0644;  // 預設權限
-//     }
-
-//     // 4. 初始化 block bitmap
-//     char* bitmap = virtualDisk + sizeof(SuperBlock) + MAXINODE * sizeof(INode);
-//     memset(bitmap, 0, sb->blockCount / 8);
-
-//     return 0;  // 初始化成功
-// }
-
 // 尋找並分配空閒block
 int getFreeBlock(void){
     if (sb->freeBlockCount == 0) {
