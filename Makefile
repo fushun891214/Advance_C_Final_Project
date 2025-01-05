@@ -23,4 +23,6 @@ $(TARGET): $(SRCS) $(HEADERS)
 
 # Clean rule to remove the executable
 clean:
-	rm -f $(TARGET)
+	@if [ -f $(TARGET) ]; then rm -f $(TARGET); fi
+	@if [ -f $(hello*.c) ]; then rm -f $(hello*.c); fi
+	@if [ -d test ]; then rm -r test; fi

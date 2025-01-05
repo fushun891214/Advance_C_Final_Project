@@ -61,14 +61,11 @@ int main(void){
                 MakeDirectory(dirname);
             }
             
-            // // else if(strcmp(cmd, "rmdir") == 0){
-            //     char dirname[32];
-            //     scanf("%s", dirname);
-            //     ChangeDirectory(dirname); 
-            //     ListFiles();
-            //     RemoveFile();
-            //     RemoveDirectory(dirname);
-            // }
+            else if(strcmp(cmd, "rmdir") == 0){
+                char dirname[32];
+                scanf("%s", dirname);
+                RemoveDirectory(dirname);
+            }
     
             else if(strncmp(cmd, "put", 3) == 0){
                 char filename[32];

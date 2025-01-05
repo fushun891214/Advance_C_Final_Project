@@ -8,6 +8,7 @@ extern INode* currentDir;
 
 void ListFiles(void);
 void ChangeDirectory(char *path);
+void PrintWorkingDirectory(char **fullPath, char *currentPath, char *path);
 void RemoveFile(char *path);
 void MakeDirectory(char *path);
 void RemoveDirectory(char *path);
