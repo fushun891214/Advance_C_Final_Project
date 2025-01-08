@@ -8,7 +8,7 @@ char* virtualDisk;
 SuperBlock* sb;
 
 int initFs(int size) {
-    // 1. 分配並清空虛擬磁碟空間
+    // 1. Allocate and clear virtual disk space
     virtualDisk = (char*)malloc(size);
     if (virtualDisk == NULL) {
         printf("Failed to allocate memory\n");
@@ -16,15 +16,15 @@ int initFs(int size) {
     }
     memset(virtualDisk, 0, size);
 
-    // 2. 初始化 SuperBlock
+    // 2. Initialize SuperBlock
     sb = (SuperBlock*)virtualDisk;
     sb->partitionSize = size;
     sb->blockSize = BLOCKSIZE;
     
-    // 3. 計算 INode 的數量
-    sb->inodeCount = (size / (sizeof(INode) * INODE_RATIO));  // 使用 1/16 空間給 inode
+    // 3. Calculate number of INodes
+    sb->inodeCount = (size / (sizeof(INode) * INODE_RATIO));  // Use 1/16 space for inodes
     
-    // 4. 初始化其他欄位
+    // 4. Initialize other fields
     sb->freeInodeCount = sb->inodeCount;
     sb->usedInodeCount = 0;
     sb->blockCount = (size - sizeof(SuperBlock) - 
@@ -35,11 +35,9 @@ int initFs(int size) {
     sb->firstDataBlock = (sizeof(SuperBlock) + 
                         sb->inodeCount * sizeof(INode) + 
                         sb->blockCount / 8 + BLOCKSIZE - 1) / BLOCKSIZE;
-    sb->maxFileSize = BLOCKSIZE * (10 + BLOCKSIZE/sizeof(int));  // 直接塊+間接塊
-    sb->magicNumber = 0x12345678;  // 自定義的魔數
     sb->mountTime = time(NULL);
 
-    // 5. 初始化 inode 區域
+    // 5. Initialize inode area
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     for(int i = 0; i < sb->inodeCount; i++) {
         inodes[i].isUsed = 0;
@@ -52,10 +50,11 @@ int initFs(int size) {
         inodes[i].createTime = time(NULL);
         inodes[i].modifyTime = time(NULL);
         inodes[i].fileType = 0;
-        inodes[i].permissions = 0644;  // 預設權限
+        inodes[i].permissions = 0644;  // Default permissions
+
     }
 
-    // 4. 初始化 block bitmap
+    // 4. Initialize block bitmap
     char* bitmap = virtualDisk + sizeof(SuperBlock) + sb->inodeCount * sizeof(INode);
     memset(bitmap, 0, sb->blockCount / 8);
 
