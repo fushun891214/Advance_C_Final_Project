@@ -7,36 +7,35 @@
 #define INODE_RATIO 16  // 表示 1/16 的空間給 inode
 
 typedef struct superBlock {
-   int partitionSize;       // 總空間大小
-   int inodeCount;          // inode總數
-   int blockCount;          // block總數
-   int freeInodeCount;      // 可用inode數
-   int usedInodeCount;      // 已使用的inode數
-   int freeBlockCount;      // 可用block數
-   int usedBlockCount;      // 已使用的block總數
-   int filesBlockCount;     // 純檔案使用的block數
-   int blockSize;           // 每個block大小
-   int firstDataBlock;      // 第一個資料區塊位置
-   int maxFileSize;         // 最大檔案大小限制
-   int magicNumber;         // 檔案系統識別碼
-   time_t mountTime;        // 掛載時間
+   int partitionSize;       // Total space size
+   int inodeCount;          // Total number of inodes
+   int blockCount;          // Total number of blocks
+   int freeInodeCount;      // Number of available inodes
+   int usedInodeCount;      // Number of used inodes
+   int freeBlockCount;      // Number of available blocks
+   int usedBlockCount;      // Total number of used blocks
+   int filesBlockCount;     // Number of blocks used by files
+   int blockSize;           // Size of each block
+   int firstDataBlock;      // Position of first data block
+   time_t mountTime;        // Mount time
 }SuperBlock;
 
-// 資料區塊：儲存實際的檔案內容
-typedef struct block {
-    char data[BLOCKSIZE];   // 實際儲存資料的空間
-} Block;
+// 定義目錄項結構
+typedef struct dirEntry {
+    char name[32];
+    int inodeNumber;
+}DirEntry;
 
 typedef struct iNode {
-    char fileName[32];          // 檔案名稱
-    int size;                   // 檔案大小(bytes)
-    int directBlocks[10];       // 直接指向的block位置
-    int indirectBlock;          // 間接block位置
-    int isUsed;                // 是否使用中
-    time_t createTime;         // 建立時間
-    time_t modifyTime;         // 修改時間
-    int fileType;              // 檔案類型(一般/目錄)
-    int permissions;           // 檔案權限
+    char fileName[32];          // File name
+    int size;                   // File size (in bytes)
+    int directBlocks[10];       // Directly pointed block locations
+    int indirectBlock;          // Indirect block location
+    int isUsed;                 // Whether it is in use
+    time_t createTime;          // Creation time
+    time_t modifyTime;          // Modification time
+    int fileType;               // File type (regular/directory)
+    int permissions;            // File permissions
 }INode;
 
 int initFs(int size);

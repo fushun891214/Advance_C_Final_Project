@@ -194,7 +194,7 @@ void RemoveFile(char *path) {
     }
 
     for(int i = 0; i < sb->inodeCount; i++) {
-        if(inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0) {
+        if(inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0 && inodes[i].fileType == 0) {
             foundInodeIndex = i;
             break;
         }
@@ -315,7 +315,7 @@ void RemoveDirectory(char *path){ // rmdir
     }
 
     for(int i = 0; i < sb->inodeCount; i++) {
-        if(inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0) {
+        if(inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0 && inodes[i].fileType == 1) {
             foundInodeIndex = i;
             break;
         }
@@ -381,7 +381,7 @@ int PutFile(char *path) {
 
 // 新增一個輔助函數來導出目錄
 int ExportDirectory(char *path, INode* dirInode){
-    // 建立實體目錄
+   // 1. 建立目標目錄
     #ifdef _WIN32
         if(mkdir(path) != 0) {
     #else
@@ -391,26 +391,36 @@ int ExportDirectory(char *path, INode* dirInode){
         return 1;
     }
 
-    // 遍歷目錄的所有區塊，尋找子檔案和子目錄
+    // 2. 遍歷目錄的所有區塊
+    INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
+    
     for(int i = 0; i < 10; i++) {
-        if(dirInode->directBlocks[i] == -1) continue;
+        if(dirInode->directBlocks[i] == -1) {
+            continue;
+        }
         
         // 取得目錄區塊
-        Block* block = (Block*)(virtualDisk + sb->firstDataBlock * BLOCKSIZE + 
-                              dirInode->directBlocks[i] * BLOCKSIZE);
+        DirEntry* entries = (DirEntry*)(virtualDisk + 
+                                                    sb->firstDataBlock * BLOCKSIZE + 
+                                                    dirInode->directBlocks[i] * BLOCKSIZE);
         
-        // 遍歷目錄中的每個項目
-        INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
-        for(int j = 0; j < sb->inodeCount; j++) {
-            if(inodes[j].isUsed) {
-                char fullPath[256];
-                snprintf(fullPath, sizeof(fullPath), "%s/%s", path, inodes[j].fileName);
-                
-                if(inodes[j].fileType == 1) {  // 如果是目錄
-                    ExportDirectory(fullPath, &inodes[j]);
-                } else {  // 如果是檔案
-                    GetFile(fullPath);
+        // 遍歷區塊中的目錄項
+        int entriesPerBlock = BLOCKSIZE / sizeof(DirEntry);
+        for(int j = 0; j < entriesPerBlock; j++) {
+            if(entries[j].inodeNumber == 0) {  // 空項
+                continue;
+            }
+            
+            INode* childInode = &inodes[entries[j].inodeNumber];
+            char childPath[512];
+            snprintf(childPath, sizeof(childPath), "%s/%s", path, entries[j].name);
+            
+            if(childInode->fileType == 1) {  // 目錄
+                if(ExportDirectory(childPath, childInode) != 0) {
+                    return 1;
                 }
+            } else {  // 檔案
+                GetFile(childPath);
             }
         }
     }
@@ -419,6 +429,23 @@ int ExportDirectory(char *path, INode* dirInode){
 }
 
 int GetFile(char *path){
+// 1. 檢查並創建 virtualFileSystem 目錄
+    struct stat st = {0};
+    if (stat("virtualFileSystem", &st) == -1) {  // 檢查目錄是否存在
+        #ifdef _WIN32
+            if(mkdir("virtualFileSystem") != 0) {
+                printf("Failed to create virtualFileSystem directory\n");
+                return 1;
+            }
+        #else
+            if(mkdir("virtualFileSystem", 0755) != 0) {
+                printf("Failed to create virtualFileSystem directory\n");
+                return 1;
+            }
+        #endif
+        printf("Created virtualFileSystem directory\n");
+    }
+
     // 1. 找到檔案的 inode
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
@@ -443,25 +470,29 @@ int GetFile(char *path){
 
     INode* inode = &inodes[foundInodeIndex];
 
+    // 3. 建立輸出路徑
+    char outputPath[512];
+    snprintf(outputPath, sizeof(outputPath), "virtualFileSystem/%s", path);
+
     // 檢查是否為目錄
     if(inode->fileType == 1) {  // 1 表示目錄
         // 在實體檔案系統建立目錄
         #ifdef _WIN32
-            if(mkdir(path) != 0) {
+            if(mkdir(outputPath) != 0) {
         #else
-            if(mkdir(path, 0755) != 0) {
+            if(mkdir(outputPath, 0755) != 0) {
         #endif
-                printf("Failed to create directory '%s'\n", path);
+                printf("Failed to create directory '%s'\n", outputPath);
                 return 1;
             }
-        printf("Directory '%s' exported successfully\n", path);
+        printf("Directory '%s' exported successfully\n", outputPath);
         return 0;
     }
     
     // 2. 建立實體檔案
-    FILE *fp = fopen(path, "w");
+    FILE *fp = fopen(outputPath, "w");
     if(fp == NULL) {
-        printf("Cannot create file '%s'\n", path);
+        printf("Cannot create file '%s'\n", outputPath);
         return 1;
     }
 
@@ -502,7 +533,8 @@ int GetFile(char *path){
     }
 
    fclose(fp);
-   printf("File '%s' retrieved successfully (size: %d bytes)\n", path, inode->size);
+   printf("File '%s' retrieved successfully to virtualFileSystem/ (size: %d bytes)\n", 
+           path, inode->size);
    return 0;
 }
 
@@ -633,8 +665,6 @@ int ViEditor(char *path) {
 
     return 0;
 }
-
-
 
 void DisplayFileContent(char *path){ //cat
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
