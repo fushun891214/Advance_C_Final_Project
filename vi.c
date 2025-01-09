@@ -28,13 +28,13 @@ void ViEditorInteractive(INode* inode, char** content, size_t* contentSize) {
     // clear stdin
     int c;
     while ((c = getchar()) != '\n' && c != EOF);
-    
+
     while (1) {
         // 1) Display the file content
         DisplayContentWithLineNumbers(*content);
 
         // 2) Prompt user
-        printf("Enter text or command (:i <n>, :d <n>, :w, :q, :wq, etc.)\n> ");
+        printf("Enter text or command (:i <n>, :d <n>, :w, :q, :wq, :help or :h)\n> ");
 
         // 3) Read user input
         char userInput[1024];
@@ -170,8 +170,12 @@ void ViEditorInteractive(INode* inode, char** content, size_t* contentSize) {
             InsertAfterLine(content, contentSize, lineNum, insertBuf);
             isSaved = 0;
         }
+        else if (strcmp(commandPart, ":help") == 0 || strcmp(commandPart, ":h") == 0) {
+            ViHelper();
+        }
         else {
             printf("Unrecognized command: '%s'\n", commandPart);
+            ViHelper();
         }
     } // end while
 }
@@ -413,4 +417,18 @@ void InitializeNewInode(INode* inode, const char* fullPath) {
         inode->directBlocks[i] = -1;
     }
     inode->indirectBlock = -1;
+}
+
+void ViHelper(void){
+    printf("Welcome to the Vi Editor Helper\n");
+    printf("You can directly type text or use the following commands\n\n");
+    printf("Suggested Commands:\n");
+    printf("-------------------------------------------------\n");
+    printf("|  :h or :help - Display this help\t\t|\n");
+    printf("|  :i <lineNumber> - Insert after a line\t|\n");
+    printf("|  :d <lineNumber> - Delete a line\t\t|\n");
+    printf("|  :w - Save the file\t\t\t\t|\n");
+    printf("|  :wq - Save and quit\t\t\t\t|\n");
+    printf("|  :q - Quit the editor\t\t\t\t|\n");
+    printf("-------------------------------------------------\n");
 }

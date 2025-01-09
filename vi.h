@@ -24,5 +24,7 @@ char* ReadFileContent(INode* inode);
 void WriteFileContent(INode* inode, const char* content);
 // Initialize a new inode (like "touch" or new file creation).
 void InitializeNewInode(INode* inode, const char* fullPath);
+// Helper function to display vi editor commands
+void ViHelper(void);
 
 #endif
