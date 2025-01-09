@@ -8,7 +8,8 @@
 
 char currentPath[MAX_PATH_LEN] = "/";
 INode* currentDir = NULL;
-char fullPath[MAX_PATH_LEN];
+char fullPath[MAX_PATH_LEN*2];
+
 
 void HandleCommands(void){
     while(1){
@@ -93,7 +94,7 @@ void ListFiles(void) {
                 char* firstSlash = strchr(inodes[i].fileName + 1, '/'); // +1 to skip the initial '/'
                 if (!firstSlash) {
                     char timeStr[26];
-                    ctime_s(timeStr, sizeof(timeStr), &inodes[i].createTime);
+                    ctime_r(&inodes[i].createTime, timeStr);
                     timeStr[24] = '\0';
                     printf("%-15s\t%s\t%4d bytes\t%s\n", 
                            inodes[i].fileName + 1, // Skip the initial '/'
@@ -114,7 +115,7 @@ void ListFiles(void) {
                         name++;
                     }
                     char timeStr[26];
-                    ctime_s(timeStr, sizeof(timeStr), &inodes[i].createTime);
+                    ctime_r(&inodes[i].createTime, timeStr);
                     timeStr[24] = '\0';
                     printf("%-15s\t%s\t%d bytes\t%s\n", 
                            name,
@@ -133,14 +134,8 @@ void ChangeDirectory(char *path) {
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
 
-    // Construct the full path for comparison
-    char fullPath[256];
-    if(strcmp(currentPath, "/") == 0) {
-        snprintf(fullPath, sizeof(fullPath), "/%s", path);
-    } else {
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
-    }
-    
+    ConstructFullPath(fullPath, path);
+
     // Handle special case ".."
     if(strcmp(path, "..") == 0) {
         // If already in the root directory
@@ -187,11 +182,7 @@ void RemoveFile(char *path) {
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
     
-    if(strcmp(currentPath, "/") == 0){
-        snprintf(fullPath, sizeof(fullPath), "%s%s", currentPath, path);
-    } else {
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
-    }
+    ConstructFullPath(fullPath, path);
 
     for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0 && inodes[i].fileType == 0) {
@@ -245,13 +236,7 @@ void RemoveFile(char *path) {
 }
 
 void MakeDirectory(char *path) {
-    // 1. Construct the full path
-    char fullPath[256];
-    if(strcmp(currentPath, "/") == 0) {
-        snprintf(fullPath, sizeof(fullPath), "%s%s", currentPath, path);
-    } else {
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
-    }
+    ConstructFullPath(fullPath, path);
 
     // 1. Check if the directory name already exists
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
@@ -307,12 +292,7 @@ void RemoveDirectory(char *path){ // rmdir
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
     
-    char fullPath[256];
-    if(strcmp(currentPath, "/") == 0){
-        snprintf(fullPath, sizeof(fullPath), "%s%s", currentPath, path);
-    } else {
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
-    }
+    ConstructFullPath(fullPath, path);
 
     for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0 && inodes[i].fileType == 1) {
@@ -339,14 +319,9 @@ void RemoveDirectory(char *path){ // rmdir
 int PutFile(char *path) { 
     // Check if the file already exists in the current directory
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
-    char fullPath[MAX_PATH_LEN];
-    
+
     // Construct the full path
-    if (strcmp(currentPath, "/") == 0) {
-        snprintf(fullPath, sizeof(fullPath), "%s%s", currentPath, path);
-    } else {
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
-    }
+    ConstructFullPath(fullPath, path);
 
     // Check if the file already exists
     for(int i = 0; i < sb->inodeCount; i++) {
@@ -450,13 +425,9 @@ int GetFile(char *path){
     // 1. Find the inode of the file
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
-    char fullPath[256];
-    if(strcmp(currentPath, "/") == 0){
-        snprintf(fullPath, sizeof(fullPath), "%s%s", currentPath, path);
-    } 
-    else{
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
-    }
+
+    ConstructFullPath(fullPath, path);
+
     for(int i = 0; i < sb->inodeCount; i++){
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0){ 
             foundInodeIndex = i;
@@ -543,9 +514,10 @@ int ViEditor(char *path) {
     // Define pointer to inode and other necessary variables
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
+    size_t contentSize = INITIAL_CONTENT_SIZE;
+    char* content = NULL;
 
     // Construct the full path
-    char fullPath[256];
     ConstructFullPath(fullPath, path);
 
     // Search for the file
@@ -559,7 +531,7 @@ int ViEditor(char *path) {
             return 1;
         }
 
-        char* content = ReadFileContent(inode);
+        content = ReadFileContent(inode);
         if (!content) {
             fprintf(stderr, "Failed to read file content\n");
             return 1;
@@ -568,7 +540,7 @@ int ViEditor(char *path) {
         printf("File last modified: %s", ctime(&inode->modifyTime));
 
         // Enter vi editor mode
-        ViEditorInteractive(inode, content);
+        ViEditorInteractive(inode, &content, &contentSize);
         free(content);
 
     } else {
@@ -585,9 +557,17 @@ int ViEditor(char *path) {
         INode* inode = &inodes[foundInodeIndex];
         InitializeNewInode(inode, fullPath);
 
+        // Allocate initial content buffer
+        content = (char*)malloc(contentSize);
+        if (!content) {
+            printf("Memory allocation error.\n");
+            return 1;
+        }
+        content[0] = '\0'; // Initialize empty content
+
         // Enter vi editor mode
-        char emptyContent[1] = "\0";
-        ViEditorInteractive(inode, emptyContent);
+        ViEditorInteractive(inode, &content, &contentSize);
+        free(content);
     }
 
     // Keep the terminal active after quitting the vi editor
@@ -596,25 +576,27 @@ int ViEditor(char *path) {
 }
 
 void ConstructFullPath(char* fullPath, const char* path) {
-    if (strcmp(currentPath, "/") == 0) {
-        snprintf(fullPath, MAX_PATH_LEN - 1, "%s%s", currentPath, path);
-    } else {
-        snprintf(fullPath, MAX_PATH_LEN - 1, "%s/%s", currentPath, path);
-    }
-    fullPath[MAX_PATH_LEN - 1] = '\0'; // Ensure null termination
-}
+    int ret;
 
+    if (strcmp(currentPath, "/") == 0) {
+        ret = snprintf(fullPath, MAX_PATH_LEN, "/%s", path);
+    } else {
+        ret = snprintf(fullPath, MAX_PATH_LEN, "%s/%s", currentPath, path);
+    }
+
+    if (ret < 0 || ret >= MAX_PATH_LEN) {
+        printf("Path too long\n");
+        fullPath[0] = '\0'; // Set fullPath to an empty string in case of error
+    } else {
+        fullPath[MAX_PATH_LEN - 1] = '\0'; // Ensure null termination
+    }
+}
 
 void DisplayFileContent(char *path){ //cat
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
-    char fullPath[256];
-    if(strcmp(currentPath, "/") == 0){
-        snprintf(fullPath, sizeof(fullPath), "%s%s", currentPath, path);
-    } 
-    else{
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
-    }
+
+    ConstructFullPath(fullPath, path);
     for(int i = 0; i < sb->inodeCount; i++){
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0){
             foundInodeIndex = i;
@@ -685,32 +667,19 @@ void Help(void){
     printf("'exit and store image' - Exit the program and store the image\n");
 }
 
-void ExitAndStoreImage(void) {
-    if (!virtualDisk || !sb || sb->partitionSize <= 0) {
-        printf("Error: Virtual disk or SuperBlock is not properly initialized.\n");
+void ExitAndStoreImage(void){
+    if (!virtualDisk || !sb) {
+        printf("Error: virtualDisk or SuperBlock is not initialized.\n");
         return;
     }
 
-    char password[32];
-    printf("Set a password to protect the dump file: ");
-    if (scanf("%31s", password) != 1 || strlen(password) == 0) {
-        printf("Error: Password cannot be empty.\n");
-        return;
-    }
-    int passwordLength = strlen(password);
-
-    // 加密數據區
-    printf("Encrypting the file system...\n");
-    EncryptVirtualDisk(virtualDisk, sb->partitionSize, password, passwordLength);
-
-    // 將加密後的虛擬磁碟保存到文件
-    FILE* fp = fopen("disk_image.bin", "wb");
+    FILE *fp = fopen("disk_image.bin", "wb");
     if (fp == NULL) {
         printf("Failed to create disk image file.\n");
         return;
     }
 
-    // 寫入 virtualDisk
+    // Write virtualDisk
     size_t writtenSize = fwrite(virtualDisk, 1, sb->partitionSize, fp);
     if (writtenSize != sb->partitionSize) {
         printf("Warning: Only %zu bytes written (expected %d bytes).\n", writtenSize, sb->partitionSize);
@@ -721,91 +690,44 @@ void ExitAndStoreImage(void) {
     exit(0);
 }
 
-
-
-int LoadDumpImage(char* path) {
-    FILE* fp = fopen(path, "rb");
+int LoadDumpImage(char *path) {
+    FILE *fp = fopen(path, "rb");
     if (fp == NULL) {
         printf("Failed to open disk image file.\n\n");
         return 1;
     }
 
-    // 1. 先讀取 SuperBlock 來取得大小資訊
+    // 1. First read the SuperBlock to get the size information
     SuperBlock tempSb;
-    if (fread(&tempSb, sizeof(SuperBlock), 1, fp) != 1) {
+    if(fread(&tempSb, sizeof(SuperBlock), 1, fp) != 1) {
         printf("Failed to read SuperBlock\n");
         fclose(fp);
         return 1;
     }
     
-    // 2. 回到檔案開頭
+    // 2. Go back to the beginning of the file
     fseek(fp, 0, SEEK_SET);
 
-    // 3. 分配記憶體
+    // 3. Allocate memory
     virtualDisk = (char*)malloc(tempSb.partitionSize);
-    if (virtualDisk == NULL) {
+    if(virtualDisk == NULL) {
         printf("Failed to allocate memory\n");
         fclose(fp);
         return 1;
     }
 
-    // 4. 讀取整個映像
+    // 4. Read the entire image
     size_t readSize = fread(virtualDisk, 1, tempSb.partitionSize, fp);
-    if (readSize != tempSb.partitionSize) {
-        printf("Warning: Only %zu bytes read (expected %d bytes).\n", readSize, tempSb.partitionSize);
+    if(readSize != tempSb.partitionSize) {
+        printf("Warning: Only %zu bytes read (expected %d bytes).\n", 
+               readSize, tempSb.partitionSize);
     }
+
+    // 5. Set the SuperBlock pointer and current path
+    sb = (SuperBlock*)virtualDisk;
+    strcpy(currentPath, "/");
 
     fclose(fp);
-
-    // 解密過程
-    char password[32];
-    printf("Enter the password to decrypt the file: ");
-    if (scanf("%31s", password) != 1 || strlen(password) == 0) {
-        printf("Error: Password cannot be empty.\n");
-        free(virtualDisk);
-        return 1;
-    }
-    int passwordLength = strlen(password);
-
-    printf("Decrypting the file system...\n");
-    DecryptVirtualDisk(virtualDisk, tempSb.partitionSize, password, passwordLength);
-
-    // 5. 設置 SuperBlock 指標和當前路徑
-    sb = (SuperBlock*)virtualDisk;
-
-    // 初始化當前目錄指向根目錄
-    strcpy(currentPath, "/");
-    INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
-    currentDir = &inodes[0];
-    if (!currentDir->isUsed || currentDir->fileType != 1) {
-        printf("Error: Root directory inode is invalid.\n");
-        free(virtualDisk);
-        return 1;
-    }
-
     printf("Disk image loaded successfully (%zu bytes read).\n", readSize);
     return 0;
-}
-
-
-void EncryptVirtualDisk(char* virtualDisk, int partitionSize, char* password, int passwordLength) {
-    SuperBlock* sb = (SuperBlock*)virtualDisk;
-    int dataStart = sizeof(SuperBlock); // 從 SuperBlock 結束後開始
-    int dataEnd = partitionSize;       // 到分區大小結束
-
-    for (int i = dataStart; i < dataEnd; i++) {
-        virtualDisk[i] ^= password[i % passwordLength];
-    }
-    printf("Encryption completed. Data range: %d to %d\n", dataStart, dataEnd);
-}
-
-void DecryptVirtualDisk(char* virtualDisk, int partitionSize, char* password, int passwordLength) {
-    SuperBlock* sb = (SuperBlock*)virtualDisk;
-    int dataStart = sizeof(SuperBlock); // 從 SuperBlock 結束後開始
-    int dataEnd = partitionSize;       // 到分區大小結束
-
-    for (int i = dataStart; i < dataEnd; i++) {
-        virtualDisk[i] ^= password[i % passwordLength];
-    }
-    printf("Decryption completed. Data range: %d to %d\n", dataStart, dataEnd);
 }

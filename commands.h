@@ -4,6 +4,7 @@
 #include "space.h"
 
 #define MAX_PATH_LEN 512
+#define INITIAL_CONTENT_SIZE 1024
 
 extern char currentPath[MAX_PATH_LEN];
 extern INode* currentDir;

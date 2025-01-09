@@ -6,10 +6,10 @@ CC = gcc
 CFLAGS = -Wall -Werror -g
 
 # Source files
-SRCS = main.c space.c commands.c
+SRCS = main.c space.c commands.c vi.c
 
 # Header files
-HEADERS = space.h commands.h
+HEADERS = space.h commands.h vi.h
 
 # Output executable
 TARGET = command

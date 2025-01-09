@@ -4,10 +4,12 @@
 #include <time.h>
 #include "vi.h"
 
+#define INITIAL_CONTENT_SIZE 1024
+
 void DisplayContentWithLineNumbers(const char* content) {
+    printf("\nCurrent File Content:\n");
     int lineNumber = 1;
     const char* lineStart = content;
-    printf("\nCurrent File Content:\n");
     while (*lineStart != '\0') {
         const char* lineEnd = strchr(lineStart, '\n');
         if (!lineEnd) lineEnd = lineStart + strlen(lineStart);
@@ -20,189 +22,281 @@ void DisplayContentWithLineNumbers(const char* content) {
     printf("-------------\n");
 }
 
-void ViEditorInteractive(INode* inode, char* content) {
-    printf("\nEntering vi editor mode. Enter :q to return to the main menu.");
-    char command[10];
-    int isSaved = 1; // Track if the file is saved
-    while(getchar() != '\n');
+void ViEditorInteractive(INode* inode, char** content, size_t* contentSize) {
+    int isSaved = 1;  // track if the file is saved
 
     while (1) {
-        DisplayContentWithLineNumbers(content);
+        // 1) Display the file content
+        DisplayContentWithLineNumbers(*content);
 
-        printf("Normal Mode. Commands: :i (insert), :d (delete), :w (save), :q (exit).\n: ");
-        fgets(command, sizeof(command), stdin);
+        // 2) Prompt user
+        printf("Enter text or command (:i <n>, :d <n>, :w, :q, :wq, etc.)\n> ");
 
-        if (strcmp(command, ":i\n") == 0) {
-            printf("Enter the line number to insert after: ");
-            int lineNumber;
-            if (scanf("%d", &lineNumber) != 1) {
-                printf("Invalid input. Returning to normal mode.\n");
-                getchar(); // Consume leftover input
-                continue;
-            }
-            getchar(); // Consume newline
-            InsertMode(content, lineNumber);
-            isSaved = 0; // Mark as unsaved
-        } else if (strcmp(command, ":d\n") == 0) {
-            printf("Enter the line number to delete: ");
-            int lineNumber;
-            if (scanf("%d", &lineNumber) != 1) {
-                printf("Invalid input. Returning to normal mode.\n");
-                getchar(); // Consume leftover input
-                continue;
-            }
-            getchar(); // Consume newline
-            DeleteLine(content, lineNumber);
-            DisplayContentWithLineNumbers(content); // Show updated content immediately
-            isSaved = 0; // Mark as unsaved
-        } else if (strcmp(command, ":w\n") == 0) {
-            WriteFileContent(inode, content);
-            printf("Changes saved.\n");
-            isSaved = 1; // Mark as saved
-        } else if (strcmp(command, ":q\n") == 0) {
-            if (!isSaved) {
-                printf("You have unsaved changes. Do you really want to exit? (y/n): ");
-                char confirm;
-                scanf(" %c", &confirm);
-                getchar(); // Consume newline
-                if (confirm == 'y' || confirm == 'Y') {
-                    printf("Exiting vi editor. Returning to command mode.\n");
+        // 3) Read user input
+        char userInput[1024];
+        if (!fgets(userInput, sizeof(userInput), stdin)) {
+            printf("Error reading user input.\n");
+            return;
+        }
+        // Remove trailing newline
+        userInput[strcspn(userInput, "\n")] = '\0';
+
+        // If user typed nothing, loop again
+        if (strlen(userInput) == 0) {
+            continue;
+        }
+
+        // 4) Look for colon (commands). If no colon, treat entire input as text
+        char* colonPos = strchr(userInput, ':');
+        if (!colonPos) {
+            // No commands => treat entire line as text to append
+            size_t newContentLen = strlen(*content) + strlen(userInput) + 2;
+            if (newContentLen > *contentSize) {
+                *contentSize = newContentLen + INITIAL_CONTENT_SIZE;
+                *content = realloc(*content, *contentSize);
+                if (!*content) {
+                    printf("Memory allocation error.\n");
                     return;
-                } else {
-                    printf("Returning to normal mode.\n");
-                    continue;
                 }
             }
-            printf("Exiting vi editor. Returning to command mode.\n");
-            return;
-        } else {
-            printf("Invalid command. Available commands: :i, :d, :w, :q\n");
-        }
-    }
-}
-
-void InsertMode(char* content, int lineNumber) {
-    printf("Entering insert mode at line %d. Type your content below.\n(Type ':q' on a new line to quit insert mode.)\n", lineNumber);
-    char line[256];
-
-    // Insert logic: split content at lineNumber, insert each line as it is typed, and reassemble
-    char* lines[1024];
-    int totalLines = SplitContent(content, lines);
-
-    while (1) {
-        DisplayContentWithLineNumbers(content);
-        printf("> ");
-        fgets(line, sizeof(line), stdin);
-        if (strcmp(line, ":q\n") == 0) break;
-
-        // Create updated content by inserting the new line
-        char* updatedContent = (char*)malloc(strlen(content) + strlen(line) + 1);
-        if (!updatedContent) {
-            fprintf(stderr, "Memory allocation failed for updatedContent.\n");
-            return;
+            strcat(*content, userInput);
+            strcat(*content, "\n");
+            isSaved = 0;
+            continue;
         }
 
-        strcpy(updatedContent, "");
-        for (int i = 0; i < lineNumber; i++) {
-            strcat(updatedContent, lines[i]);
-            strcat(updatedContent, "\n");
+        // We found a colon => everything before colon can be text
+        // everything from colon onward can be a command
+        size_t prefixLen = (size_t)(colonPos - userInput);
+        char textBefore[1024];
+        strncpy(textBefore, userInput, prefixLen);
+        textBefore[prefixLen] = '\0';
+
+        char commandPart[1024];
+        strcpy(commandPart, colonPos); // e.g. ":i 3 more"
+
+        // If there's text before the command, append it
+        if (strlen(textBefore) > 0) {
+            size_t newContentLen = strlen(*content) + strlen(textBefore) + 2;
+            if (newContentLen > *contentSize) {
+                *contentSize = newContentLen + INITIAL_CONTENT_SIZE;
+                *content = realloc(*content, *contentSize);
+                if (!*content) {
+                    printf("Memory allocation error.\n");
+                    return;
+                }
+            }
+            strcat(*content, textBefore);
+            strcat(*content, "\n");
+            isSaved = 0;
         }
-        strcat(updatedContent, line);
-        if (lineNumber < totalLines) {
-            for (int i = lineNumber; i < totalLines; i++) {
-                strcat(updatedContent, lines[i]);
-                strcat(updatedContent, "\n");
+
+        // 5) Parse the commandPart
+        // e.g. ":i 3", ":d 2", ":w", ":q", ":wq", etc.
+        if (strcmp(commandPart, ":q") == 0) {
+            // Quit
+            if (!isSaved) {
+                printf("You have unsaved changes. Quit anyway? (y/n): ");
+                char c;
+                if (scanf(" %c", &c) != 1) c = 'n';
+                getchar(); // consume leftover newline
+                if (c == 'y' || c == 'Y') {
+                    printf("Exiting vi editor.\n");
+                    return;
+                }
+                // else continue
+            } else {
+                printf("Exiting vi editor.\n");
+                return;
             }
         }
-        strcpy(content, updatedContent);
-        free(updatedContent);
+        else if (strcmp(commandPart, ":w") == 0) {
+            // Save
+            WriteFileContent(inode, *content);
+            printf("Changes saved.\n");
+            isSaved = 1;
+        }
+        else if (strcmp(commandPart, ":wq") == 0) {
+            // Save and quit
+            WriteFileContent(inode, *content);
+            printf("Saved. Exiting vi editor.\n");
+            return;
+        }
+        else if (strncmp(commandPart, ":d", 2) == 0) {
+            // :d <lineNumber>
+            // Example: ":d 3"
+            int lineNum = 0;
+            // find space
+            char* spacePos = strchr(commandPart, ' ');
+            if (spacePos) {
+                lineNum = atoi(spacePos + 1);
+            }
+            if (lineNum > 0) {
+                DeleteLine(*content, lineNum);
+                isSaved = 0;
+            } else {
+                printf("Invalid delete syntax (use :d <lineNumber>).\n");
+            }
+        }
+        else if (strncmp(commandPart, ":i", 2) == 0) {
+            // :i <lineNumber>
+            // Insert after a line number
+            int lineNum = 0;
+            char* spacePos = strchr(commandPart, ' ');
+            if (spacePos) {
+                lineNum = atoi(spacePos + 1);
+            }
+            if (lineNum <= 0) {
+                printf("Invalid insert syntax (use :i <lineNumber>).\n");
+                continue;
+            }
 
-        // Update split lines to reflect changes
-        totalLines = SplitContent(content, lines);
+            // For demonstration, we can ask the user for text to insert
+            // or parse from the same line, etc.
+            // Here, let's ask the user on a separate prompt:
+            printf("[Insert Mode] Enter the text to insert after line %d:\n> ", lineNum);
+            char insertBuf[1024];
+            if (!fgets(insertBuf, sizeof(insertBuf), stdin)) {
+                printf("Error reading insert text.\n");
+                continue;
+            }
+            // remove trailing newline
+            insertBuf[strcspn(insertBuf, "\n")] = '\0';
+
+            InsertAfterLine(content, contentSize, lineNum, insertBuf);
+            isSaved = 0;
+        }
+        else {
+            printf("Unrecognized command: '%s'\n", commandPart);
+        }
+    } // end while
+}
+
+void InsertAfterLine(char** content, size_t* contentSize, int lineNumber, const char* text) {
+    int currentLine = 1;
+    char* lineStart = *content;
+    while (*lineStart != '\0') {
+        char* lineEnd = strchr(lineStart, '\n');
+        if (!lineEnd) lineEnd = lineStart + strlen(lineStart);
+
+        if (currentLine == lineNumber) {
+            // Insert after this line
+            size_t oldLen = strlen(*content);
+            size_t textLen = strlen(text);
+            // +2 for possible extra newline + null terminator
+            size_t newLen = oldLen + textLen + 2;  
+            if (newLen > *contentSize) {
+                *contentSize = newLen + INITIAL_CONTENT_SIZE;
+                *content = realloc(*content, *contentSize);
+                if (!*content) {
+                    printf("Memory allocation error.\n");
+                    return;
+                }
+            }
+
+            // Copy from content start up to the end of "this line"
+            // `lineEnd - content + 1` gives you index inclusive of the newline
+            size_t prefixSize = (lineEnd - *content) + 1; 
+            char* newBuf = malloc(newLen);
+            if (!newBuf) {
+                printf("Memory allocation error.\n");
+                return;
+            }
+            strncpy(newBuf, *content, prefixSize);
+            newBuf[prefixSize] = '\0';  // ensure termination
+
+            // Add the new text
+            strncat(newBuf, text, textLen);
+            strcat(newBuf, "\n");
+
+            // Add the remainder (everything after lineEnd)
+            strncat(newBuf, lineEnd + 1, oldLen - prefixSize);
+
+            // Copy back
+            strcpy(*content, newBuf);
+            free(newBuf);
+            return;
+        }
+
+        if (*lineEnd == '\0') break;
+        lineStart = lineEnd + 1;
+        currentLine++;
     }
 
-    printf("Exiting insert mode. Returning to normal mode.\n");
+    // If we get here, line not found
+    printf("Line number %d not found.\n", lineNumber);
 }
 
 void DeleteLine(char* content, int lineNumber) {
-    printf("Deleting line %d.\n", lineNumber);
-    // Deletion logic: split content, remove the line, and reassemble
-    char* lines[1024];
-    int totalLines = SplitContent(content, lines);
+    // Find the line number
+    int currentLine = 1;
+    char* lineStart = content;
+    while (*lineStart != '\0') {
+        char* lineEnd = strchr(lineStart, '\n');
+        if (!lineEnd) lineEnd = lineStart + strlen(lineStart);
 
-    if (lineNumber > 0 && lineNumber <= totalLines) {
-        char* updatedContent = (char*)malloc(strlen(content) + 1);
-        if (!updatedContent) {
-            fprintf(stderr, "Memory allocation failed for updatedContent.\n");
+        if (currentLine == lineNumber) {
+            // Found the line number
+            // Delete this line
+            char* newContent = (char*)malloc(strlen(content) + 1);
+            if (!newContent) {
+                printf("Memory allocation error.\n");
+                return;
+            }
+
+            // Copy content up to lineStart
+            strncpy(newContent, content, (size_t)(lineStart - content));
+            newContent[lineStart - content] = '\0';
+
+            // Append the rest of the content
+            strcat(newContent, lineEnd + 1);
+
+            // Replace the content
+            strcpy(content, newContent);
+            free(newContent);
             return;
         }
 
-        strcpy(updatedContent, "");
-        for (int i = 0; i < totalLines; i++) {
-            if (i != lineNumber - 1) {
-                strcat(updatedContent, lines[i]);
-                strcat(updatedContent, "\n");
-            }
-        }
-        strcpy(content, updatedContent);
-        free(updatedContent);
-    } else {
-        printf("Invalid line number. Returning to normal mode.\n");
+        if (*lineEnd == '\0') break;
+        lineStart = lineEnd + 1;
+        currentLine++;
     }
 
-    printf("Line deleted. Returning to normal mode.\n");
+    // If we reach here, the line number was not found
+    printf("Line number %d not found.\n", lineNumber);
 }
 
 int SplitContent(char* content, char* lines[]) {
-    char* tempContent = strdup(content); // Duplicate content to avoid modifying the original
-    if (!tempContent) {
-        fprintf(stderr, "Memory allocation failed for tempContent.\n");
-        return 0;
+    int totalLines = 0;
+    char* lineStart = content;
+    while (*lineStart != '\0') {
+        char* lineEnd = strchr(lineStart, '\n');
+        if (!lineEnd) lineEnd = lineStart + strlen(lineStart);
+
+        lines[totalLines] = (char*)malloc((size_t)(lineEnd - lineStart) + 1);
+        if (!lines[totalLines]) {
+            printf("Memory allocation error.\n");
+            return totalLines;
+        }
+
+        strncpy(lines[totalLines], lineStart, (size_t)(lineEnd - lineStart));
+        lines[totalLines][(size_t)(lineEnd - lineStart)] = '\0';
+
+        totalLines++;
+
+        if (*lineEnd == '\0') break;
+        lineStart = lineEnd + 1;
     }
 
-    int lineCount = 0;
-    char* line = strtok(tempContent, "\n");
-    while (line != NULL) {
-        lines[lineCount++] = strdup(line); // Allocate memory for each line
-        line = strtok(NULL, "\n");
-    }
-
-    free(tempContent);
-    return lineCount;
+    return totalLines;
 }
 
 void FreeSplitLines(char* lines[], int totalLines) {
     for (int i = 0; i < totalLines; i++) {
-        free(lines[i]); // Free each allocated line
+        free(lines[i]);
     }
 }
 
-void WriteFileContent(INode* inode, const char* content) {
-    int contentLength = strlen(content);
-    int numBlocks = (contentLength + BLOCKSIZE - 1) / BLOCKSIZE;
-
-    // Allocate direct blocks and write content
-    for (int i = 0; i < numBlocks && i < 10; i++) {
-        int blockNum = allocateBlock();
-        if (blockNum == -1) {
-            printf("No free blocks available\n");
-            return;
-        }
-
-        inode->directBlocks[i] = blockNum;
-        char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE + blockNum * BLOCKSIZE;
-
-        int writeSize = ((i + 1) * BLOCKSIZE > contentLength) ? (contentLength - i * BLOCKSIZE) : BLOCKSIZE;
-        memcpy(blockStart, content + i * BLOCKSIZE, writeSize);
-    }
-
-    // Update inode information
-    inode->size = contentLength;
-    inode->modifyTime = time(NULL);
-}
-
-
-// ViEditor
 int SearchInode(const char* fullPath, INode* inodes) {
     for (int i = 0; i < sb->inodeCount; i++) {
         if (inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0) {
@@ -213,18 +307,22 @@ int SearchInode(const char* fullPath, INode* inodes) {
 }
 
 char* ReadFileContent(INode* inode) {
-    int remainSize = inode->size;
     char* content = (char*)malloc(inode->size + 1);
-    if (!content) return NULL;
+    if (!content) {
+        printf("Memory allocation error.\n");
+        return NULL;
+    }
 
-    char* contentPtr = content;
+    int remainSize = inode->size;
+    char* contentPos = content;
+
     for (int i = 0; i < 10 && remainSize > 0; i++) {
         if (inode->directBlocks[i] == -1) break;
 
         char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE + inode->directBlocks[i] * BLOCKSIZE;
         int readSize = (remainSize > BLOCKSIZE) ? BLOCKSIZE : remainSize;
-        memcpy(contentPtr, blockStart, readSize);
-        contentPtr += readSize;
+        memcpy(contentPos, blockStart, readSize);
+        contentPos += readSize;
         remainSize -= readSize;
     }
 
@@ -236,24 +334,79 @@ char* ReadFileContent(INode* inode) {
 
             char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE + indirectTable[i] * BLOCKSIZE;
             int readSize = (remainSize > BLOCKSIZE) ? BLOCKSIZE : remainSize;
-            memcpy(contentPtr, blockStart, readSize);
-            contentPtr += readSize;
+            memcpy(contentPos, blockStart, readSize);
+            contentPos += readSize;
             remainSize -= readSize;
         }
     }
 
-    content[inode->size] = '\0';
+    *contentPos = '\0';
     return content;
+}
+
+void WriteFileContent(INode* inode, const char* content) {
+    int remainSize = strlen(content);
+    char* contentPos = (char*)content;
+
+    for (int i = 0; i < 10 && remainSize > 0; i++) {
+        if (inode->directBlocks[i] == -1) {
+            inode->directBlocks[i] = allocateBlock();
+            if (inode->directBlocks[i] == -1) {
+                printf("No free block available.\n");
+                return;
+            }
+        }
+
+        char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE + inode->directBlocks[i] * BLOCKSIZE;
+        int writeSize = (remainSize > BLOCKSIZE) ? BLOCKSIZE : remainSize;
+        memcpy(blockStart, contentPos, writeSize);
+        contentPos += writeSize;
+        remainSize -= writeSize;
+    }
+
+    if (remainSize > 0) {
+        if (inode->indirectBlock == -1) {
+            inode->indirectBlock = allocateBlock();
+            if (inode->indirectBlock == -1) {
+                printf("No free block available.\n");
+                return;
+            }
+        }
+
+        int* indirectTable = (int*)(virtualDisk + sb->firstDataBlock * BLOCKSIZE + inode->indirectBlock * BLOCKSIZE);
+
+        for (int i = 0; i < BLOCKSIZE / sizeof(int) && remainSize > 0; i++) {
+            if (indirectTable[i] == -1) {
+                indirectTable[i] = allocateBlock();
+                if (indirectTable[i] == -1) {
+                    printf("No free block available.\n");
+                    return;
+                }
+            }
+
+            char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE + indirectTable[i] * BLOCKSIZE;
+            int writeSize = (remainSize > BLOCKSIZE) ? BLOCKSIZE : remainSize;
+            memcpy(blockStart, contentPos, writeSize);
+            contentPos += writeSize;
+            remainSize -= writeSize;
+        }
+    }
+
+    inode->size = strlen(content);
+    inode->modifyTime = time(NULL);
 }
 
 void InitializeNewInode(INode* inode, const char* fullPath) {
     strncpy(inode->fileName, fullPath, sizeof(inode->fileName) - 1);
+    inode->fileName[sizeof(inode->fileName) - 1] = '\0'; // Ensure null termination
     inode->size = 0;
     inode->isUsed = 1;
-    inode->fileType = 0;  // Regular file
+    inode->fileType = 0;  // 0 indicates regular file
     inode->createTime = time(NULL);
     inode->modifyTime = time(NULL);
 
-    for (int i = 0; i < 10; i++) inode->directBlocks[i] = -1;
+    for (int i = 0; i < 10; i++) {
+        inode->directBlocks[i] = -1;
+    }
     inode->indirectBlock = -1;
 }
