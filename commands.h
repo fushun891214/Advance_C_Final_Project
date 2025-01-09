@@ -25,7 +25,6 @@ void Help(void);
 void ExitAndStoreImage(void);
 int LoadDumpImage(char *path);
 int ExportDirectory(char *path, INode* dirInode);
-
 void EncryptVirtualDisk(char* virtualDisk, int partitionSize, char* password, int passwordLength);
 void DecryptVirtualDisk(char* virtualDisk, int partitionSize, char* password, int passwordLength);
 

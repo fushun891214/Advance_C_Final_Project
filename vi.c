@@ -25,6 +25,10 @@ void DisplayContentWithLineNumbers(const char* content) {
 void ViEditorInteractive(INode* inode, char** content, size_t* contentSize) {
     int isSaved = 1;  // track if the file is saved
 
+    // clear stdin
+    int c;
+    while ((c = getchar()) != '\n' && c != EOF);
+    
     while (1) {
         // 1) Display the file content
         DisplayContentWithLineNumbers(*content);
