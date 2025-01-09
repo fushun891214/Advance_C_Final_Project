@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "space.h"
 #include "commands.h"
+#include "vi.h"
 
 int main(void){
     int option=0;
