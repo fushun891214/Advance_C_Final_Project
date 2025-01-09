@@ -746,19 +746,31 @@ void Help(void){
     printf("'exit and store image' - Exit the program and store the image\n");
 }
 
-void ExitAndStoreImage(void){
-    if (!virtualDisk || !sb) {
-        printf("Error: virtualDisk or SuperBlock is not initialized.\n");
+void ExitAndStoreImage(void) {
+    if (!virtualDisk || !sb || sb->partitionSize <= 0) {
+        printf("Error: Virtual disk or SuperBlock is not properly initialized.\n");
         return;
     }
 
-    FILE *fp = fopen("disk_image.bin", "wb");
+    char password[32];
+    printf("Set a password to protect the dump file: ");
+    if (scanf("%31s", password) != 1 || strlen(password) == 0) {
+        printf("Error: Password cannot be empty.\n");
+        return;
+    }
+    int passwordLength = strlen(password);
+
+    // 加密數據區
+    printf("Encrypting the file system...\n");
+    EncryptVirtualDisk(virtualDisk, sb->partitionSize, password, passwordLength);
+
+    // 將加密後的虛擬磁碟保存到文件
+    FILE* fp = fopen("disk_image.bin", "wb");
     if (fp == NULL) {
         printf("Failed to create disk image file.\n");
         return;
     }
 
-    // 寫入 virtualDisk
     size_t writtenSize = fwrite(virtualDisk, 1, sb->partitionSize, fp);
     if (writtenSize != sb->partitionSize) {
         printf("Warning: Only %zu bytes written (expected %d bytes).\n", writtenSize, sb->partitionSize);
@@ -769,44 +781,91 @@ void ExitAndStoreImage(void){
     exit(0);
 }
 
-int LoadDumpImage(char *path) {
-    FILE *fp = fopen(path, "rb");
+
+
+int LoadDumpImage(char* path) {
+    FILE* fp = fopen(path, "rb");
     if (fp == NULL) {
         printf("Failed to open disk image file.\n\n");
         return 1;
     }
 
-    // 1. 先讀取 SuperBlock 來取得大小資訊
+    // 預讀 SuperBlock 以獲取分區大小
     SuperBlock tempSb;
-    if(fread(&tempSb, sizeof(SuperBlock), 1, fp) != 1) {
+    if (fread(&tempSb, sizeof(SuperBlock), 1, fp) != 1) {
         printf("Failed to read SuperBlock\n");
         fclose(fp);
         return 1;
     }
-    
-    // 2. 回到檔案開頭
+
+    // 回到文件開頭
     fseek(fp, 0, SEEK_SET);
 
-    // 3. 分配記憶體
+    // 分配虛擬磁碟內存
     virtualDisk = (char*)malloc(tempSb.partitionSize);
-    if(virtualDisk == NULL) {
+    if (virtualDisk == NULL) {
         printf("Failed to allocate memory\n");
         fclose(fp);
         return 1;
     }
 
-    // 4. 讀取整個映像
+    // 讀取整個映像
     size_t readSize = fread(virtualDisk, 1, tempSb.partitionSize, fp);
-    if(readSize != tempSb.partitionSize) {
-        printf("Warning: Only %zu bytes read (expected %d bytes).\n", 
-               readSize, tempSb.partitionSize);
+    if (readSize != tempSb.partitionSize) {
+        printf("Warning: Only %zu bytes read (expected %d bytes).\n", readSize, tempSb.partitionSize);
     }
 
-    // 5. 設置 SuperBlock 指標和當前路徑
-    sb = (SuperBlock*)virtualDisk;
-    strcpy(currentPath, "/");
-
     fclose(fp);
+
+    // 解密過程
+    char password[32];
+    printf("Enter the password to decrypt the file: ");
+    if (scanf("%31s", password) != 1 || strlen(password) == 0) {
+        printf("Error: Password cannot be empty.\n");
+        free(virtualDisk);
+        return 1;
+    }
+    int passwordLength = strlen(password);
+
+    printf("Decrypting the file system...\n");
+    DecryptVirtualDisk(virtualDisk, tempSb.partitionSize, password, passwordLength);
+
+    // 檢查 SuperBlock 完整性
+    sb = (SuperBlock*)virtualDisk;
+
+    // 初始化當前目錄指向根目錄
+    strcpy(currentPath, "/");
+    INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
+    currentDir = &inodes[0];
+    if (!currentDir->isUsed || currentDir->fileType != 1) {
+        printf("Error: Root directory inode is invalid.\n");
+        free(virtualDisk);
+        return 1;
+    }
+
     printf("Disk image loaded successfully (%zu bytes read).\n", readSize);
     return 0;
+}
+
+
+void EncryptVirtualDisk(char* virtualDisk, int partitionSize, char* password, int passwordLength) {
+    SuperBlock* sb = (SuperBlock*)virtualDisk;
+    int dataStart = sizeof(SuperBlock); // 從 SuperBlock 結束後開始
+    int dataEnd = partitionSize;       // 到分區大小結束
+
+    for (int i = dataStart; i < dataEnd; i++) {
+        virtualDisk[i] ^= password[i % passwordLength];
+    }
+    printf("Encryption completed. Data range: %d to %d\n", dataStart, dataEnd);
+}
+
+void DecryptVirtualDisk(char* virtualDisk, int partitionSize, char* password, int passwordLength) {
+    SuperBlock* sb = (SuperBlock*)virtualDisk;
+    int dataStart = sizeof(SuperBlock); // 從 SuperBlock 結束後開始
+    int dataEnd = partitionSize;       // 到分區大小結束
+
+    for (int i = dataStart; i < dataEnd; i++) {
+        virtualDisk[i] ^= password[i % passwordLength];
+    }
+    printf("Decryption completed. Data range: %d to %d\n", dataStart, dataEnd);
 }
