@@ -4,11 +4,11 @@
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
-#include "space.h"
+#include "vi.h"
 
 char currentPath[MAX_PATH_LEN] = "/";
 INode* currentDir = NULL;
-char fullPath[256];
+char fullPath[MAX_PATH_LEN];
 
 void HandleCommands(void){
     while(1){
@@ -77,48 +77,48 @@ void HandleCommands(void){
     }
 }
 
-// 列出所有檔案
-void ListFiles(void){
+// List all files in the current directory
+void ListFiles(void) {
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
-    printf("\n目錄 %s 的內容:\n", currentPath);
-    printf("---------------------------------------------------------\n");
-    printf("檔名\t\t類型\t\t大小\t\t建立時間\n");
-    printf("---------------------------------------------------------\n");
+    printf("\nContents of directory %s:\n", currentPath);
+    printf("-----------------------------------------------------------------------------\n");
+    printf("Filename\tType\t\tSize\t\tCreation Time\n");
+    printf("-----------------------------------------------------------------------------\n");
 
     for (int i = 0; i < sb->inodeCount; i++) {
         if (inodes[i].isUsed) {
-            // 檢查檔案是否屬於當前目錄
+            // Check if the file belongs to the current directory
             if (strcmp(currentPath, "/") == 0) {
-                // 根目錄的情況：只顯示沒有 '/' 的檔案或直接在根目錄下的檔案
-                char* firstSlash = strchr(inodes[i].fileName + 1, '/');  // +1 跳過開頭的 '/'
+                // For the root directory, show files directly under it
+                char* firstSlash = strchr(inodes[i].fileName + 1, '/'); // +1 to skip the initial '/'
                 if (!firstSlash) {
                     char timeStr[26];
-                    ctime_r(&inodes[i].createTime, timeStr);
+                    ctime_s(timeStr, sizeof(timeStr), &inodes[i].createTime);
                     timeStr[24] = '\0';
-                    printf("%-15s\t%s\t%d bytes\t%s\n", 
-                           inodes[i].fileName + 1,  // 跳過開頭的 '/'
-                           inodes[i].fileType == 1 ? "目錄" : "檔案",
+                    printf("%-15s\t%s\t%4d bytes\t%s\n", 
+                           inodes[i].fileName + 1, // Skip the initial '/'
+                           inodes[i].fileType == 1 ? "Directory" : "File",
                            inodes[i].size,
                            timeStr);
                 }
             } else {
-                // 其他目錄的情況：檢查完整路徑
+                // For other directories, check full paths
                 char* prefix = malloc(strlen(currentPath) + 2);
-                sprintf(prefix, "%s/", currentPath + 1);  // +1 跳過開頭的 '/'
-                
+                sprintf(prefix, "%s/", currentPath + 1); // +1 to skip the initial '/'
+
                 if (strncmp(inodes[i].fileName + 1, prefix, strlen(prefix)) == 0 &&
                     strchr(inodes[i].fileName + strlen(prefix) + 1, '/') == NULL) {
-                    // 顯示不含路徑的檔案名
+                    // Show file name without the full path
                     char* name = inodes[i].fileName + strlen(prefix);
-                    if(name[0] == '/'){
+                    if (name[0] == '/') {
                         name++;
                     }
                     char timeStr[26];
-                    ctime_r(&inodes[i].createTime, timeStr);
+                    ctime_s(timeStr, sizeof(timeStr), &inodes[i].createTime);
                     timeStr[24] = '\0';
                     printf("%-15s\t%s\t%d bytes\t%s\n", 
                            name,
-                           inodes[i].fileType == 1 ? "目錄" : "檔案",
+                           inodes[i].fileType == 1 ? "Directory" : "File",
                            inodes[i].size,
                            timeStr);
                 }
@@ -126,14 +126,14 @@ void ListFiles(void){
             }
         }
     }
-    printf("---------------------------------------------------------\n");
+    printf("-----------------------------------------------------------------------------\n");
 }
 
 void ChangeDirectory(char *path) {
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
 
-    // 構建完整路徑以進行比對
+    // Construct the full path for comparison
     char fullPath[256];
     if(strcmp(currentPath, "/") == 0) {
         snprintf(fullPath, sizeof(fullPath), "/%s", path);
@@ -141,14 +141,14 @@ void ChangeDirectory(char *path) {
         snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
     }
     
-    // 處理特殊情況 ".."
+    // Handle special case ".."
     if(strcmp(path, "..") == 0) {
-        // 如果已經在根目錄
+        // If already in the root directory
         if(strcmp(currentPath, "/") == 0) {
             return;
         }
         
-        // 回到上一層目錄
+        // Go back to the parent directory
         char* lastSlash = strrchr(currentPath, '/');
         if(lastSlash != currentPath) {
             *lastSlash = '\0';
@@ -159,7 +159,7 @@ void ChangeDirectory(char *path) {
         return;
     }
 
-    // // 尋找目標目錄
+    // Find the target directory
     for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && 
            strcmp(inodes[i].fileName, fullPath) == 0 && 
@@ -174,16 +174,16 @@ void ChangeDirectory(char *path) {
         return;
     }
     
-    // 更新當前路徑
+    // Update the current path
     strncpy(currentPath, fullPath, sizeof(currentPath) - 1);
     
-    // 更新當前目錄
+    // Update the current directory
     currentDir = &inodes[foundInodeIndex];
     printf("Changed to directory: %s\n", currentPath);
 }
 
 void RemoveFile(char *path) {
-    // 1. 檢查並找到檔案的 inode
+    // 1. Check and find the inode of the file
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
     
@@ -205,7 +205,7 @@ void RemoveFile(char *path) {
         return;
     }
 
-    // 2. 釋放所有直接區塊
+    // 2. Release all direct blocks
     INode* inode = &inodes[foundInodeIndex];
     for(int i = 0; i < 10; i++) {
         if(inode->directBlocks[i] != -1) {
@@ -214,30 +214,30 @@ void RemoveFile(char *path) {
         }
     }
 
-    // 3. 處理間接區塊（如果有）
+    // 3. Handle indirect blocks (if any)
     if(inode->indirectBlock != -1) {
-        // 取得間接區塊表
+        // Get the indirect block table
         int* indirectTable = (int*)(virtualDisk + 
                                   sb->firstDataBlock * BLOCKSIZE + 
                                   inode->indirectBlock * BLOCKSIZE);
         
-        // 釋放所有指向的區塊
+        // Release all pointed blocks
         for(int i = 0; i < BLOCKSIZE/sizeof(int); i++) {
             if(indirectTable[i] != -1) {
                 freeBlock(indirectTable[i]);
             }
         }
-        // 釋放間接區塊本身
+        // Release the indirect block itself
         freeBlock(inode->indirectBlock);
         inode->indirectBlock = -1;
     }
 
-    // 4. 更新 inode 資訊
+    // 4. Update inode information
     inode->isUsed = 0;
     inode->size = 0;
     memset(inode->fileName, 0, sizeof(inode->fileName));
     
-    // 5. 更新系統計數器
+    // 5. Update system counters
     sb->freeInodeCount++;
     sb->usedInodeCount--;
 
@@ -245,7 +245,7 @@ void RemoveFile(char *path) {
 }
 
 void MakeDirectory(char *path) {
-    // 1. 建構完整路徑
+    // 1. Construct the full path
     char fullPath[256];
     if(strcmp(currentPath, "/") == 0) {
         snprintf(fullPath, sizeof(fullPath), "%s%s", currentPath, path);
@@ -253,7 +253,7 @@ void MakeDirectory(char *path) {
         snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
     }
 
-    // 1. 檢查目錄名稱是否已存在
+    // 1. Check if the directory name already exists
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, path) == 0) {
@@ -262,43 +262,43 @@ void MakeDirectory(char *path) {
         }
     }
 
-    // 2. 分配 inode
+    // 2. Allocate an inode
     int inodeNum = allocateInode();
     if(inodeNum == -1) {
         printf("No free inode available\n");
         return;
     }
 
-    // 3. 初始化目錄的 inode
+    // 3. Initialize the inode for the directory
     INode* inode = &inodes[inodeNum];
     strncpy(inode->fileName, path, sizeof(inode->fileName) - 1);
-    inode->fileType = 1;  // 1 表示目錄
+    inode->fileType = 1;  // 1 indicates directory
     inode->isUsed = 1;
     inode->size = 0;
     inode->createTime = time(NULL);
     inode->modifyTime = time(NULL);
-    inode->permissions = 0755;  // 目錄的默認權限
+    inode->permissions = 0755;  // Default permissions for directory
 
-    // 4. 初始化目錄的內容
+    // 4. Initialize the content of the directory
     for(int i = 0; i < 10; i++) {
         inode->directBlocks[i] = -1;
     }
     inode->indirectBlock = -1;
     
-    // 5. 分配第一個區塊來存儲目錄項
+    // 5. Allocate the first block to store directory entries
     int blockNum = allocateBlock();
     if(blockNum == -1) {
-        // 如果分配區塊失敗，需要回滾
+        // If block allocation fails, rollback
         freeInode(inodeNum);
         printf("Failed to allocate block for directory\n");
         return;
     }
     inode->directBlocks[0] = blockNum;
 
-    // 6. 更新系統計數
+    // 6. Update system counters
     sb->filesBlockCount++;
 
-    // 在創建目錄時使用完整路徑
+    // Use the full path when creating the directory
     strncpy(inode->fileName, fullPath, sizeof(inode->fileName) - 1);
     printf("Directory '%s' created successfully\n", path);
 }
@@ -337,18 +337,18 @@ void RemoveDirectory(char *path){ // rmdir
 }
 
 int PutFile(char *path) { 
-    // 檢查檔案是否已存在於當前目錄
+    // Check if the file already exists in the current directory
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     char fullPath[MAX_PATH_LEN];
     
-    // 構建完整路徑
+    // Construct the full path
     if (strcmp(currentPath, "/") == 0) {
         snprintf(fullPath, sizeof(fullPath), "%s%s", currentPath, path);
     } else {
         snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
     }
 
-    // 檢查檔案是否已存在
+    // Check if the file already exists
     for(int i = 0; i < sb->inodeCount; i++) {
         if(inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0) {
             printf("File already exists in current directory\n");
@@ -366,7 +366,7 @@ int PutFile(char *path) {
     strncpy(inode->fileName, fullPath, sizeof(inode->fileName) - 1);
     inode->size = 0;
     inode->isUsed = 1;
-    inode->fileType = 0;  // 0 表示一般檔案
+    inode->fileType = 0;  // 0 indicates regular file
     inode->createTime = time(NULL);
     inode->modifyTime = time(NULL);
     
@@ -379,9 +379,10 @@ int PutFile(char *path) {
     return 0;
 }
 
-// 新增一個輔助函數來導出目錄
+
+// Add a helper function to export a directory
 int ExportDirectory(char *path, INode* dirInode){
-   // 1. 建立目標目錄
+   // 1. Create the target directory
     #ifdef _WIN32
         if(mkdir(path) != 0) {
     #else
@@ -391,7 +392,7 @@ int ExportDirectory(char *path, INode* dirInode){
         return 1;
     }
 
-    // 2. 遍歷目錄的所有區塊
+    // 2. Traverse all blocks of the directory
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     
     for(int i = 0; i < 10; i++) {
@@ -399,15 +400,15 @@ int ExportDirectory(char *path, INode* dirInode){
             continue;
         }
         
-        // 取得目錄區塊
+        // Get the directory block
         DirEntry* entries = (DirEntry*)(virtualDisk + 
                                                     sb->firstDataBlock * BLOCKSIZE + 
                                                     dirInode->directBlocks[i] * BLOCKSIZE);
         
-        // 遍歷區塊中的目錄項
+        // Traverse the directory entries in the block
         int entriesPerBlock = BLOCKSIZE / sizeof(DirEntry);
         for(int j = 0; j < entriesPerBlock; j++) {
-            if(entries[j].inodeNumber == 0) {  // 空項
+            if(entries[j].inodeNumber == 0) {  // Empty entry
                 continue;
             }
             
@@ -415,11 +416,11 @@ int ExportDirectory(char *path, INode* dirInode){
             char childPath[512];
             snprintf(childPath, sizeof(childPath), "%s/%s", path, entries[j].name);
             
-            if(childInode->fileType == 1) {  // 目錄
+            if(childInode->fileType == 1) {  // Directory
                 if(ExportDirectory(childPath, childInode) != 0) {
                     return 1;
                 }
-            } else {  // 檔案
+            } else {  // File
                 GetFile(childPath);
             }
         }
@@ -429,9 +430,9 @@ int ExportDirectory(char *path, INode* dirInode){
 }
 
 int GetFile(char *path){
-// 1. 檢查並創建 virtualFileSystem 目錄
+// 1. Check and create the virtualFileSystem directory
     struct stat st = {0};
-    if (stat("virtualFileSystem", &st) == -1) {  // 檢查目錄是否存在
+    if (stat("virtualFileSystem", &st) == -1) {  // Check if the directory exists
         #ifdef _WIN32
             if(mkdir("virtualFileSystem") != 0) {
                 printf("Failed to create virtualFileSystem directory\n");
@@ -446,7 +447,7 @@ int GetFile(char *path){
         printf("Created virtualFileSystem directory\n");
     }
 
-    // 1. 找到檔案的 inode
+    // 1. Find the inode of the file
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
     char fullPath[256];
@@ -470,13 +471,13 @@ int GetFile(char *path){
 
     INode* inode = &inodes[foundInodeIndex];
 
-    // 3. 建立輸出路徑
+    // 3. Create the output path
     char outputPath[512];
     snprintf(outputPath, sizeof(outputPath), "virtualFileSystem/%s", path);
 
-    // 檢查是否為目錄
-    if(inode->fileType == 1) {  // 1 表示目錄
-        // 在實體檔案系統建立目錄
+    // Check if it is a directory
+    if(inode->fileType == 1) {  // 1 indicates directory
+        // Create the directory in the physical file system
         #ifdef _WIN32
             if(mkdir(outputPath) != 0) {
         #else
@@ -489,36 +490,36 @@ int GetFile(char *path){
         return 0;
     }
     
-    // 2. 建立實體檔案
+    // 2. Create the physical file
     FILE *fp = fopen(outputPath, "w");
     if(fp == NULL) {
         printf("Cannot create file '%s'\n", outputPath);
         return 1;
     }
 
-    int remainSize = inode->size;  // 追蹤還需要寫入的檔案大小
+    int remainSize = inode->size;  // Track the remaining file size to be written
     
-    // 3. 處理直接區塊
+    // 3. Handle direct blocks
     for(int i = 0; i < 10 && remainSize > 0; i++) {
         if(inode->directBlocks[i] == -1) break;
         
         char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE + 
                             inode->directBlocks[i] * BLOCKSIZE;
         
-        // 計算這個區塊要寫入多少內容
+        // Calculate how much content to write for this block
         int writeSize = (remainSize > BLOCKSIZE) ? BLOCKSIZE : remainSize;
         fwrite(blockStart, 1, writeSize, fp);
         remainSize -= writeSize;
     }
 
-    // 4. 處理間接區塊
+    // 4. Handle indirect blocks
     if(remainSize > 0 && inode->indirectBlock != -1) {
-        // 取得間接區塊表的位置
+        // Get the location of the indirect block table
         int* indirectTable = (int*)(virtualDisk + 
                                     sb->firstDataBlock * BLOCKSIZE + 
                                     inode->indirectBlock * BLOCKSIZE);
         
-        // 讀取間接區塊表中的每個區塊
+        // Read each block in the indirect block table
         for(int i = 0; i < BLOCKSIZE/sizeof(int) && remainSize > 0; i++){
             if(indirectTable[i] == -1) break;
             
@@ -539,70 +540,39 @@ int GetFile(char *path){
 }
 
 int ViEditor(char *path) {
-    // 定義指向 inode 的指標和其他所需變數
+    // Define pointer to inode and other necessary variables
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
     int foundInodeIndex = -1;
 
-    // 構建完整路徑
+    // Construct the full path
     char fullPath[256];
-    if (strcmp(currentPath, "/") == 0) {
-        snprintf(fullPath, sizeof(fullPath), "%s%s", currentPath, path);
-    } else {
-        snprintf(fullPath, sizeof(fullPath), "%s/%s", currentPath, path);
-    }
+    ConstructFullPath(fullPath, path);
 
-    // 搜尋檔案
-    for (int i = 0; i < sb->inodeCount; i++) {
-        if (inodes[i].isUsed && strcmp(inodes[i].fileName, fullPath) == 0) {
-            foundInodeIndex = i;
-            break;
-        }
-    }
+    // Search for the file
+    foundInodeIndex = SearchInode(fullPath, inodes);
 
     if (foundInodeIndex != -1) {
-        // 如果檔案存在，讀取並顯示內容
+        // If file exists, read and display its content
         INode* inode = &inodes[foundInodeIndex];
         if (inode->fileType == 1) {
             printf("'%s' is a directory\n", path);
             return 1;
         }
 
-        int remainSize = inode->size;
-        char* content = (char*)malloc(inode->size + 1);
+        char* content = ReadFileContent(inode);
         if (!content) {
-            fprintf(stderr, "Memory allocation failed\n");
+            fprintf(stderr, "Failed to read file content\n");
             return 1;
         }
 
-        char* contentPtr = content;
-        for (int i = 0; i < 10 && remainSize > 0; i++) {
-            if (inode->directBlocks[i] == -1) break;
+        printf("File last modified: %s", ctime(&inode->modifyTime));
 
-            char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE + inode->directBlocks[i] * BLOCKSIZE;
-            int readSize = (remainSize > BLOCKSIZE) ? BLOCKSIZE : remainSize;
-            memcpy(contentPtr, blockStart, readSize);
-            contentPtr += readSize;
-            remainSize -= readSize;
-        }
-
-        if (remainSize > 0 && inode->indirectBlock != -1) {
-            int* indirectTable = (int*)(virtualDisk + sb->firstDataBlock * BLOCKSIZE + inode->indirectBlock * BLOCKSIZE);
-
-            for (int i = 0; i < BLOCKSIZE / sizeof(int) && remainSize > 0; i++) {
-                if (indirectTable[i] == -1) break;
-
-                char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE + indirectTable[i] * BLOCKSIZE;
-                int readSize = (remainSize > BLOCKSIZE) ? BLOCKSIZE : remainSize;
-                memcpy(contentPtr, blockStart, readSize);
-                contentPtr += readSize;
-                remainSize -= readSize;
-            }
-        }
-        content[inode->size] = '\0';
-        printf("File content:\n%s\n", content);
+        // Enter vi editor mode
+        ViEditorInteractive(inode, content);
         free(content);
+
     } else {
-        // 如果檔案不存在，創建新檔案
+        // If file does not exist, create a new file
         printf("File '%s' not found. Creating a new file...\n", path);
 
         foundInodeIndex = allocateInode();
@@ -611,60 +581,29 @@ int ViEditor(char *path) {
             return 1;
         }
 
-        // 獲取使用者輸入內容
-        printf("-----------------enter vi editor-----------------\n");
-        printf("Enter content (type ':q' on a new line to quit):\n");
-        char content[1024];
-        char line[256];
-        content[0] = '\0';  // 初始化為空字串
-
-        // 清空輸入緩衝區
-        int c;
-        while ((c = getchar()) != '\n' && c != EOF);
-        
-        while (1) {
-            printf("> ");
-            fgets(line, sizeof(line), stdin);
-            if (strcmp(line, ":q\n") == 0){
-                break;
-            }
-            strncat(content, line, sizeof(content) - strlen(content) - 1);
-        }
-        printf("-------------------------------------------------\n");
-
-        // 將內容寫入檔案
+        // Initialize the new inode
         INode* inode = &inodes[foundInodeIndex];
-        int contentLength = strlen(content);
-        int numBlocks = (contentLength + BLOCKSIZE - 1) / BLOCKSIZE;
+        InitializeNewInode(inode, fullPath);
 
-        // 分配直接區塊並寫入內容
-        for (int i = 0; i < numBlocks && i < 10; i++) {
-            int blockNum = allocateBlock();
-            if (blockNum == -1) {
-                printf("No free blocks available\n");
-                return 1;
-            }
-
-            inode->directBlocks[i] = blockNum;
-            char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE + blockNum * BLOCKSIZE;
-
-            int writeSize = ((i + 1) * BLOCKSIZE > contentLength) ? (contentLength - i * BLOCKSIZE) : BLOCKSIZE;
-            memcpy(blockStart, content + i * BLOCKSIZE, writeSize);
-        }
-
-        // 更新 inode 資訊
-        strncpy(inode->fileName, fullPath, sizeof(inode->fileName) - 1);
-        inode->size = contentLength;
-        inode->isUsed = 1;
-        inode->fileType = 0;  // 一般檔案
-        inode->modifyTime = time(NULL);
-        inode->createTime = time(NULL);
-
-        printf("File '%s' created successfully.\n", path);
+        // Enter vi editor mode
+        char emptyContent[1] = "\0";
+        ViEditorInteractive(inode, emptyContent);
     }
 
+    // Keep the terminal active after quitting the vi editor
+    printf("Returning to command mode.\n");
     return 0;
 }
+
+void ConstructFullPath(char* fullPath, const char* path) {
+    if (strcmp(currentPath, "/") == 0) {
+        snprintf(fullPath, MAX_PATH_LEN - 1, "%s%s", currentPath, path);
+    } else {
+        snprintf(fullPath, MAX_PATH_LEN - 1, "%s/%s", currentPath, path);
+    }
+    fullPath[MAX_PATH_LEN - 1] = '\0'; // Ensure null termination
+}
+
 
 void DisplayFileContent(char *path){ //cat
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
@@ -758,7 +697,7 @@ void ExitAndStoreImage(void){
         return;
     }
 
-    // 寫入 virtualDisk
+    // Write virtualDisk
     size_t writtenSize = fwrite(virtualDisk, 1, sb->partitionSize, fp);
     if (writtenSize != sb->partitionSize) {
         printf("Warning: Only %zu bytes written (expected %d bytes).\n", writtenSize, sb->partitionSize);
@@ -776,7 +715,7 @@ int LoadDumpImage(char *path) {
         return 1;
     }
 
-    // 1. 先讀取 SuperBlock 來取得大小資訊
+    // 1. First read the SuperBlock to get the size information
     SuperBlock tempSb;
     if(fread(&tempSb, sizeof(SuperBlock), 1, fp) != 1) {
         printf("Failed to read SuperBlock\n");
@@ -784,10 +723,10 @@ int LoadDumpImage(char *path) {
         return 1;
     }
     
-    // 2. 回到檔案開頭
+    // 2. Go back to the beginning of the file
     fseek(fp, 0, SEEK_SET);
 
-    // 3. 分配記憶體
+    // 3. Allocate memory
     virtualDisk = (char*)malloc(tempSb.partitionSize);
     if(virtualDisk == NULL) {
         printf("Failed to allocate memory\n");
@@ -795,14 +734,14 @@ int LoadDumpImage(char *path) {
         return 1;
     }
 
-    // 4. 讀取整個映像
+    // 4. Read the entire image
     size_t readSize = fread(virtualDisk, 1, tempSb.partitionSize, fp);
     if(readSize != tempSb.partitionSize) {
         printf("Warning: Only %zu bytes read (expected %d bytes).\n", 
                readSize, tempSb.partitionSize);
     }
 
-    // 5. 設置 SuperBlock 指標和當前路徑
+    // 5. Set the SuperBlock pointer and current path
     sb = (SuperBlock*)virtualDisk;
     strcpy(currentPath, "/");
 
