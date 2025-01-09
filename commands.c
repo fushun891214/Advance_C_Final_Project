@@ -661,6 +661,7 @@ void Help(void){
     printf("'rmdir' - Remove directory\n");
     printf("'put' - Put file into the space\n");
     printf("'get' - Get file from the space\n");
+    printf("'vi' - Edit file\n");
     printf("'cat' - Display file content\n");
     printf("'status' - Display the status of the space\n");
     printf("'help' - Display the list of commands\n");
