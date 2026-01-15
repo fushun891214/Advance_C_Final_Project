@@ -316,7 +316,7 @@ void RemoveDirectory(char *path){ // rmdir
     printf("Directory '%s' removed successfully\n", path);
 }
 
-int PutFile(char *path) { 
+int PutFile(char *path) {
     // Check if the file already exists in the current directory
     INode* inodes = (INode*)(virtualDisk + sizeof(SuperBlock));
 
@@ -331,26 +331,97 @@ int PutFile(char *path) {
         }
     }
 
+    // Open the host file
+    FILE *fp = fopen(path, "rb");
+    if(fp == NULL) {
+        printf("Cannot open host file '%s'\n", path);
+        return 1;
+    }
+
+    // Get file size
+    fseek(fp, 0, SEEK_END);
+    long fileSize = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+
+    // Allocate inode
     int inodeNum = allocateInode();
     if(inodeNum == -1) {
+        fclose(fp);
         printf("No free inode available\n");
         return 1;
     }
 
     INode* inode = &inodes[inodeNum];
     strncpy(inode->fileName, fullPath, sizeof(inode->fileName) - 1);
-    inode->size = 0;
+    inode->size = fileSize;
     inode->isUsed = 1;
     inode->fileType = 0;  // 0 indicates regular file
     inode->createTime = time(NULL);
     inode->modifyTime = time(NULL);
-    
+
     for(int i = 0; i < 10; i++) {
         inode->directBlocks[i] = -1;
     }
     inode->indirectBlock = -1;
 
-    printf("File '%s' created successfully\n", fullPath);
+    // Write to direct blocks
+    int remainSize = fileSize;
+    for(int i = 0; i < 10 && remainSize > 0; i++) {
+        int blockNum = allocateBlock();
+        if(blockNum == -1) {
+            fclose(fp);
+            freeInode(inodeNum);
+            printf("Failed to allocate block\n");
+            return 1;
+        }
+        inode->directBlocks[i] = blockNum;
+
+        char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE +
+                          blockNum * BLOCKSIZE;
+        int readSize = (remainSize > BLOCKSIZE) ? BLOCKSIZE : remainSize;
+        fread(blockStart, 1, readSize, fp);
+        remainSize -= readSize;
+    }
+
+    // Handle indirect blocks if file size > 10KB
+    if(remainSize > 0) {
+        int indirectBlockNum = allocateBlock();
+        if(indirectBlockNum == -1) {
+            fclose(fp);
+            printf("Failed to allocate indirect block\n");
+            return 1;
+        }
+        inode->indirectBlock = indirectBlockNum;
+
+        int* indirectTable = (int*)(virtualDisk +
+                                    sb->firstDataBlock * BLOCKSIZE +
+                                    indirectBlockNum * BLOCKSIZE);
+
+        // Initialize indirect table
+        for(int i = 0; i < BLOCKSIZE/sizeof(int); i++) {
+            indirectTable[i] = -1;
+        }
+
+        // Allocate and write indirect blocks
+        for(int i = 0; i < BLOCKSIZE/sizeof(int) && remainSize > 0; i++) {
+            int blockNum = allocateBlock();
+            if(blockNum == -1) {
+                fclose(fp);
+                printf("Failed to allocate data block\n");
+                return 1;
+            }
+            indirectTable[i] = blockNum;
+
+            char* blockStart = virtualDisk + sb->firstDataBlock * BLOCKSIZE +
+                              blockNum * BLOCKSIZE;
+            int readSize = (remainSize > BLOCKSIZE) ? BLOCKSIZE : remainSize;
+            fread(blockStart, 1, readSize, fp);
+            remainSize -= readSize;
+        }
+    }
+
+    fclose(fp);
+    printf("File '%s' imported successfully (%ld bytes)\n", fullPath, fileSize);
     return 0;
 }
 
